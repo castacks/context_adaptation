@@ -1,0 +1,25 @@
+---
+VLAD:
+  n_clusters: 8
+  cache_dir: 'dino_clusters/not_turnpike_8'
+  model: "dinov2_vitg14"
+  desc_layer: 31
+ONLINE_CLUSTERING:
+  n_clusters: 3
+  sname: 'context_clusters/DINO_IM224_ln31_CROP_20_feats_holdout_2_not_turnpike_reduced'
+  cluster_similarity_threshold: .5
+  subcluster_similarity_threshold: .4
+  pair_similarity_maximum: 1.0
+  n_vectors: 500
+BEHAVIOR:
+  filter_size: 10
+  buffer_size: 50
+  speed_init: 3.0
+  max_cost: .3
+  velocity_margin: .8
+  adaptation_factor: .001
+  speed_cap: 5.5
+  weighted_avg_speed: True
+MISC:
+  update_freq: 5
+  image_size: 224
