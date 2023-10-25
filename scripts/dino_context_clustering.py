@@ -67,11 +67,14 @@ class Context_Clusterer(object):
     def __init__(self,cost_topic, odom_topic , im_topic, context_topic, vel_pub_topic, config, viz=True, pub_anchors = True, pub_stats=True):
 
         self.viz = viz
+        self.pub_anchors = pub_anchors
+        self.pub_stats = pub_stats
+
         rp = rospkg.RosPack()
         assets_dir = os.path.join(rp.get_path("context_adaptation"), "assets") + '/'
 
 
-        init_centroids = False
+        init_centroid = False
         if 'sname' in config['ONLINE_CLUSTERING']:
             NCLUSTERS = config['ONLINE_CLUSTERING']['n_clusters']
             SNAME = assets_dir + config['ONLINE_CLUSTERING']['sname']
@@ -101,8 +104,9 @@ class Context_Clusterer(object):
         cst = config['ONLINE_CLUSTERING']['cluster_similarity_threshold']
         scst = config['ONLINE_CLUSTERING']['subcluster_similarity_threshold']
         psm = config['ONLINE_CLUSTERING']['pair_similarity_maximum']
-        nv = config['ONLINE_CLUSTERING']['n_vectors']
+
         if init_centroid:
+            nv = config['ONLINE_CLUSTERING']['n_vectors']
             self.links = LinksCluster(cst, scst, psm, store_vectors=True,initial_centroids = kmeans.centroids.cpu().numpy(),dist_metric='cosine',n_vectors=nv)
             self.num_contexts = len(self.links.clusters)
         else:
@@ -153,7 +157,7 @@ class Context_Clusterer(object):
         self.weighted_avg_speed = config['BEHAVIOR']['weighted_avg_speed']
 
 
-        if self.viz:
+        if self.viz or self.pub_anchors:
             self.fig, self.ax = plt.subplots(1,3)
             self.ln, = self.ax[0].plot([], [], 'ro')
             self.x_data, self.y_data = [] , []
@@ -176,6 +180,9 @@ class Context_Clusterer(object):
 
         self.context_pub = rospy.Publisher(context_topic,Int32,queue_size=2)
         self.max_vel_pub = rospy.Publisher(vel_pub_topic,Float32,queue_size=2)
+
+        if self.pub_anchors:
+            self.anchor_pub = rospy.Publisher('/context/current_anchor',Image,queue_size=2)
 
         print('DONE WITH INIT')
 
@@ -309,21 +316,41 @@ class Context_Clusterer(object):
             self.speed_map[cur_context] = [self.speed_init, np.zeros(self.buffer_size) + self.cost]
             self.num_contexts += 1
 
-        if self.viz:
+        if self.viz or self.pub_anchors:
             if cur_context in self.anchor_dict:
                 cossim = probs_list[cur_context]
                 best = self.anchor_dict[cur_context][1]
                 if cossim > best:
                     self.anchor_dict[cur_context] = (cv2.resize(img, dsize=(224, 224), interpolation=cv2.INTER_AREA),cossim)
-                    self.ax[2].cla()
-                    self.ax[2].imshow(self.anchor_dict[cur_context][0])
+                    if self.viz:
+                        self.ax[2].cla()
+                        self.ax[2].imshow(self.anchor_dict[cur_context][0])
+                    # if self.pub_anchors:
+                    #     img_msg = self.bridge.cv2_to_imgmsg(self.anchor_dict[cur_context][0], "passthrough")
+                    #     self.anchor_pub.publish(img_msg)
+                    #     print('here')
             else:
                 cossim = probs_list[cur_context]
                 self.anchor_dict[cur_context] = (cv2.resize(img, dsize=(224, 224), interpolation=cv2.INTER_AREA),cossim)
-                self.ax[2].cla()
-                self.ax[2].imshow(self.anchor_dict[cur_context][0])
+                if self.viz:
+                    self.ax[2].cla()
+                    self.ax[2].imshow(self.anchor_dict[cur_context][0])
+                # if self.pub_anchors:
+                #     # vimg =
+                #     img_msg = self.bridge.cv2_to_imgmsg(self.anchor_dict[cur_context][0], "passthrough")
+                #     self.anchor_pub.publish(img_msg)
+                #     print('here')
 
-            self.ax[2].set_title("CONTEXT: " + str(cur_context))
+
+            if self.viz:
+                self.ax[2].set_title("CONTEXT: " + str(cur_context))
+
+            if self.pub_anchors:
+                # vimg =
+                vimg = (self.anchor_dict[cur_context][0]*255).astype(np.uint8)
+                img_msg = self.bridge.cv2_to_imgmsg(vimg, "rgb8")
+                self.anchor_pub.publish(img_msg)
+                # print('here')
 
         print(cur_context)
         # print(self.speed_map)

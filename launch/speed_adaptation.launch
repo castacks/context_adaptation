@@ -5,7 +5,7 @@
     <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
 
 	<node pkg="context_adaptation" type="dino_context_clustering.py" name="context_clustering" output="screen">
-        <param name="config_file" value="CC_large_model_config.yaml"/>
+        <param name="config_file" value="CC_big_model_config.yaml"/>
 
 				<param name="cost_topic" value="/traversability_cost"/>
 				<param name="odom_topic" value="/odometry/filtered_odom"/>

@@ -160,7 +160,7 @@ class TraversabilityCostNode(object):
 
         # Set up publishers
         self.cost = None
-        self.cost_publisher = rospy.Publisher('/traversability_cost_desktop', Float32, queue_size=10)
+        self.cost_publisher = rospy.Publisher('/traversability_cost', Float32, queue_size=10)
 
         # Set data buffer
         pad_val = Imu()
