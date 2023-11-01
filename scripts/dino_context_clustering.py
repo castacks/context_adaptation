@@ -209,6 +209,22 @@ class Context_Clusterer(object):
         # img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         # print(img.shape)
 
+        if self.velocity < .2:
+            if self.weighted_avg_speed:
+                # print(probs_list)
+                probs_list = np.array(probs_list) + 1
+                speed_list = np.array([self.speed_map[k][0] for k in range(self.num_contexts)])
+                # print(speed_list, probs_list)
+                cmd_speed = np.average(speed_list,weights=probs_list)
+            else:
+                cmd_speed = self.speed_map[cur_context][0]
+
+            out_speed = Float32()
+            out_speed.data = cmd_speed
+            self.max_vel_pub.publish(out_speed)
+            print(time.perf_counter() - now, 'time')
+            break
+
         img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
 
 
