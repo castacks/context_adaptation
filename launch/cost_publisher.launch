@@ -4,7 +4,7 @@
     <!-- File management -->
     <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
 
-	<node pkg="context_adaptation" type="cost_publisher.py" name="roughness_cost" output="screen">
+	<node pkg="context_adaptation" type="cost_publisher_updated.py" name="roughness_cost" output="screen">
         <param name="cost_stats_dir" value="wanda_cost_statistics.yaml"/>
 	</node>
 

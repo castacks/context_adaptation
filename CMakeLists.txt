@@ -166,6 +166,8 @@ ${catkin_INCLUDE_DIRS}
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
    scripts/cost_publisher.py
+   scripts/cost_publisher_updated.py
+
    scripts/dino_context_clustering.py
 
    #src/context_adaptation_common/anyloc_utils.py
