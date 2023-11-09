@@ -123,7 +123,7 @@ class Context_Clusterer(object):
 
         print("INITIALIZED WITH " + str(len(self.links.clusters)) + " Clusters")
 
-        self.buff = np.zeros(config['BEHAVIOR']['filter_size'])#-1
+        self.buff = np.zeros(config['BEHAVIOR']['mode_filter_size'])#-1
         self.tsu = time.perf_counter()
         self.update_freq = config['MISC']['update_freq']
 
@@ -155,6 +155,7 @@ class Context_Clusterer(object):
         self.velocity = 0
         self.cost = 0
         self.weighted_avg_speed = config['BEHAVIOR']['weighted_avg_speed']
+        self.cur_context = 0
 
 
         if self.viz or self.pub_anchors:
@@ -197,12 +198,12 @@ class Context_Clusterer(object):
 
     def handle_cost(self, msg):
         self.cost = msg.data
-        # print(self.cost)
+        # print('cost', self.cost)
 
     def handle_image(self, msg):
         now = time.perf_counter()
         print('----')
-        # self.hz_counter += 1
+        self.hz_counter += 1
         # if self.hz_counter % 4 != 0:
         #     return
         # np_arr = np.frombuffer(msg.data, np.uint8)
@@ -217,13 +218,14 @@ class Context_Clusterer(object):
                 # print(speed_list, probs_list)
                 cmd_speed = np.average(speed_list,weights=probs_list)
             else:
-                cmd_speed = self.speed_map[cur_context][0]
+                cmd_speed = self.speed_map[self.cur_context][0]
 
             out_speed = Float32()
             out_speed.data = cmd_speed
             self.max_vel_pub.publish(out_speed)
-            print(time.perf_counter() - now, 'time')
-            break
+            # print(time.perf_counter() - now, 'time')
+            print('NOT MOVING SO NOT CLUSTERING')
+            return
 
         img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
 
@@ -280,8 +282,17 @@ class Context_Clusterer(object):
 
         # vec = vec/np.linalg.norm(vec)
 
-        pred,probs_list = self.links.predict(vec,return_probs=True)
-        print(probs_list)
+        if self.hz_counter % 5 == 0:
+            pred,probs_list = self.links.predict(vec,return_probs=True)
+            self.probs_list = probs_list
+            print(probs_list)
+            print(self.cur_context)
+            self.buff[1:] = self.buff[:-1]
+            self.buff[0] = pred
+
+        outpred = stats.mode(self.buff)[0]
+        cur_context = int(outpred)
+        probs_list = self.probs_list
 
         if self.viz:
             self.skip_counter += 1
@@ -310,22 +321,19 @@ class Context_Clusterer(object):
             # self.ax[2].imshow(viz_img)
 
 
-        # print(pred)
-        self.buff[1:] = self.buff[:-1]
-        self.buff[0] = pred
 
-        outpred = stats.mode(self.buff)[0]
-        cur_context = int(outpred)
 
         if cur_context in self.speed_map:
-            # print(self.velocity)
+            # print(self.velocity, self.speed_map[cur_context][0])
             if np.abs(self.velocity - self.speed_map[cur_context][0]) < self.velocity_margin:
                 self.speed_map[cur_context][1][1:] = self.speed_map[cur_context][1][:-1]
                 self.speed_map[cur_context][1][0] = self.cost
 
-                if np.mean(self.speed_map[cur_context][1]) > self.max_cost:
+                avg_context_cost = np.mean(self.speed_map[cur_context][1])
+                # print(avg_context_cost)
+                if avg_context_cost > self.max_cost:
                     self.speed_map[cur_context][0] *= 1.0-self.adaptation_factor
-                elif np.mean(self.speed_map[cur_context][1]) < self.max_cost*.8:
+                elif avg_context_cost < self.max_cost*.8:
                     self.speed_map[cur_context][0] *= 1.0+self.adaptation_factor
                     self.speed_map[cur_context][0] = np.min([self.speed_map[cur_context][0], self.speed_cap])
         else:
@@ -368,7 +376,7 @@ class Context_Clusterer(object):
                 self.anchor_pub.publish(img_msg)
                 # print('here')
 
-        print(cur_context)
+        # print(cur_context)
         # print(self.speed_map)
         # for i in range(len(self.speed_map)):
             # print(i, self.speed_map[i][0])
