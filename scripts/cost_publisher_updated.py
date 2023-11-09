@@ -162,16 +162,16 @@ class TraversabilityCostNode(object):
         # Set up subscribers
         # rospy.Subscriber('/lester/imu/data', Imu, self.handle_imu, queue_size=1)
         rospy.Subscriber('/novatel/imu/data', Imu, self.handle_imu, queue_size=1)
-        # rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
+        rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
         rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
-        rospy.Subscriber('/joy_auto', Joy, self.handle_joy, queue_size=1)
+        rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
 
         # Set up publishers
         self.cost = 0
-        self.cost_publisher = rospy.Publisher('/traversability_cost', Float32, queue_size=10)
+        self.cost_publisher = rospy.Publisher('/traversability_cost_desktop', Float32, queue_size=10)
         self.cost_array_publisher = rospy.Publisher('/traversability_breakdown', Float32MultiArray, queue_size=10)
-        # self.cost_publisher_baseline = rospy.Publisher('/traversability_cost_baseline', Float32, queue_size=10)
+        self.cost_publisher_baseline = rospy.Publisher('/traversability_cost_baseline', Float32, queue_size=10)
         # self.cost_wheel = rospy.Publisher('/wheel_cost', Float32, queue_size=10)
         # self.cost_curv = rospy.Publisher('/curv_cost', Float32, queue_size=10)
 
@@ -193,12 +193,13 @@ class TraversabilityCostNode(object):
         self.bufferRoll = Buffer(self.buffer_size, padded=True, pad_val=0)
         self.bufferPitch = Buffer(self.buffer_size, padded=True, pad_val=0)
 
-        self.bufferL = Buffer(self.shock_buff_size, padded=True, pad_val=0)
-        self.bufferR = Buffer(self.shock_buff_size, padded=True, pad_val=0)
+        self.bufferL = Buffer(self.shock_buff_size, padded=True, pad_val=6)
+        self.bufferR = Buffer(self.shock_buff_size, padded=True, pad_val=6)
 
         self.bufferCurv = Buffer(30, padded=True, pad_val=0)
 
         self.bufferJoy = Buffer(32, padded=True, pad_val=0)
+
 
         # Load stats for different cost functions:
         self.cost_stats_dir = cost_stats_dir
@@ -211,8 +212,10 @@ class TraversabilityCostNode(object):
         self.cost_stats = self.all_costs_stats[self.cost_name]
         self.sensor_name = "imu_z"
         self.sensor_freq = 100
-        self.min_freq = .5
-        self.max_freq = 40
+        # self.min_freq = .5
+        # self.max_freq = 40
+        self.min_freq = 1.0
+        self.max_freq = 30
         # self.cost_stats['min'] = self.min_freq
         # self.cost_stats['max'] = self.max_freq
         # self.num_bins = 5
@@ -223,16 +226,20 @@ class TraversabilityCostNode(object):
 
         self.wheel_diff = 0
         self.joy_cost = 0
+        self.shock_cost = 0
 
 
     def handle_joy(self, msg):
+        print('axes', msg.axes[2])
         self.bufferJoy.insert(msg.axes[2])
 
         # print(self.bufferJoy.data)
         cost = cost_function(self.bufferJoy.data, 8, self.cost_name, self.cost_stats, freq_range=[.1, 10], num_bins=None)
         # cost = np.var(self.bufferJoy.data)
+        print('cost', cost)
 
-        self.joy_cost = self.joy_cost + (cost - self.joy_cost)*.6
+
+        self.joy_cost = self.joy_cost + (cost - self.joy_cost)*.05
 
         # joy_msg = Float32()
         # joy_msg.data = cost
@@ -245,7 +252,7 @@ class TraversabilityCostNode(object):
         curv_msg = Float32()
         #cost_msg.header = msg.header
         # curv_msg.data = np.var(self.bufferCurv.data)
-        cost = cost_function(self.bufferCurv.data, 10, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
+        # cost = cost_function(self.bufferCurv.data, 10, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
         # curv_msg.data = msg.average_curvature
         # curv_msg.data = cost*10
 
@@ -293,22 +300,32 @@ class TraversabilityCostNode(object):
 
         # print('here')
         # cost = cost_function(self.buffer.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=None, num_bins=self.num_bins)
-        costZ = cost_function(self.bufferZ.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
+        costZ = cost_function(self.bufferZ.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[5, self.max_freq], num_bins=None)
         costRoll = cost_function(self.bufferRoll.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
-        costPitch = cost_function(self.bufferPitch.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
+        costPitch = cost_function(self.bufferPitch.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[4, self.max_freq], num_bins=None)
         costX = cost_function(self.bufferX.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
         costY = cost_function(self.bufferY.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
         # cost = costZ*.4 + costRoll*100 + costPitch*600
         # cost = costX*.7
         # cost = costY
         # cost = (costZ*.3 + costRoll*100 + costPitch*400 + costX*.7 + costY*.5)*.2
-        cost = (costZ*.8 + costRoll*700 + costPitch*400 + costX*.8 + costY*.8 + self.joy_cost*1000)*.1
+        # cost = (costZ*.8 + costRoll*700 + costPitch*400 + costX*.8 + costY*.8 + self.joy_cost*1000)*.1
+        # cost = (costZ*.8 + costRoll*700 + costPitch*400 + costX*.8 + costY*.8 + self.joy_cost*1000 + self.shock_cost*350)*.4
+
+        # cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*.4
+
+        cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075
+
+        # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
+
+
+
         # print(costX)
         print(f"Publishing cost: {cost}")
         cost_msg = Float32()
         #cost_msg.header = msg.header
 
-        # if cost > .55:
+        # if cost > .25:
         #     cost = 1
         # else:
         #     cost = 0
@@ -317,40 +334,46 @@ class TraversabilityCostNode(object):
         self.cost_publisher.publish(cost_msg)
         print("Published cost!")
 
-        array = [costZ*.8 , costRoll*700 , costPitch*400 , costX*.8 , costY*.8 , self.joy_cost*1000]
+        array = [costZ*.8 , costRoll*1700 , costPitch*800 , costX*.0 , costY*.0 , self.joy_cost*10, self.shock_cost*350]
+        # print(array)
         arr_msg = Float32MultiArray()
         arr_msg.data = array
         self.cost_array_publisher.publish(arr_msg)
 
+        # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.0
         #
+        # # if cost > .25:
+        # #     cost = 1
+        # # else:
+        # #     cost = 0
+        #
+        # cost_msg.data = cost
+        # self.cost_publisher_baseline.publish(cost_msg)
+        # print("Published cost!")
+
+        #self.min_freq
         # cost_msg.data = (costZ*.3 + costRoll*100 + costPitch*400 + costX*.7 + costY*.5)*.3
         # self.cost_publisher_baseline.publish(cost_msg)
 
-    # def handle_shock(self, msg):
-    #     print("-----")
-    #     print("Received Shock message")
-    #     # self.buffer.insert(msg.linear_acceleration.z + np.abs(msg.angular_velocity.x))
-    #     # print(msg.front_left)
-    #     self.bufferL.insert(msg.rear_left)
-    #     self.bufferR.insert(msg.rear_right)
-    #
-    #     # print('here')
-    #     # cost = cost_function(self.buffer.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=None, num_bins=self.num_bins)
-    #     costL = cost_function(self.bufferL.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
-    #     costR = cost_function(self.bufferR.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
-    #     cost = costL + costR
-    #     cost *= self.shock_mult
-    #     cost = min(cost,self.shock_max)
-    #     # self.cost = self.cost + (cost-self.cost)*.15
-    #     self.cost = cost
-    #     # print(costX)
-    #     print(f"Publishing cost: {self.cost}")
-    #     cost_msg = Float32()
-    #     #cost_msg.header = msg.header
-    #     # cost_msg.data = self.cost
-    #     cost_msg.data = msg.rear_left
-    #     self.cost_publisher.publish(cost_msg)
-    #     print("Published cost!")
+    def handle_shock(self, msg):
+        print("-----")
+        print("Received Shock message")
+        # self.buffer.insert(msg.linear_acceleration.z + np.abs(msg.angular_velocity.x))
+        # print(msg.front_left)
+        self.bufferL.insert(msg.rear_left)
+        self.bufferR.insert(msg.rear_right)
+
+        # print('here')
+        # cost = cost_function(self.buffer.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=None, num_bins=self.num_bins)
+        costL = cost_function(self.bufferL.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[2, self.max_freq], num_bins=None)
+        costR = cost_function(self.bufferR.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[2, self.max_freq], num_bins=None)
+        cost = costL + costR
+        #
+        # cost *= self.shock_mult
+        # cost = min(cost,self.shock_max)
+
+        self.shock_cost = self.shock_cost + (cost - self.shock_cost)*.3
+
 
 
 if __name__ == "__main__":
