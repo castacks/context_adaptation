@@ -23,7 +23,7 @@ import math
 # import tf
 
 from sensor_msgs.msg import CompressedImage, Image
-from std_msgs.msg import Int32, Float32
+from std_msgs.msg import Int32, Float32, Float32MultiArray
 import skimage
 import time
 import cv2
@@ -184,6 +184,7 @@ class Context_Clusterer(object):
 
         if self.pub_anchors:
             self.anchor_pub = rospy.Publisher('/context/current_anchor',Image,queue_size=2)
+        self.context_array_publisher = rospy.Publisher('/context_probabilities', Float32MultiArray, queue_size=10)
 
         print('DONE WITH INIT')
 
@@ -203,6 +204,8 @@ class Context_Clusterer(object):
     def handle_image(self, msg):
         now = time.perf_counter()
         print('----')
+        if self.hz_counter == 50000:
+            self.hz_counter = 0
         self.hz_counter += 1
         # if self.hz_counter % 4 != 0:
         #     return
@@ -284,7 +287,7 @@ class Context_Clusterer(object):
 
         if self.hz_counter % 5 == 0:
             pred,probs_list = self.links.predict(vec,return_probs=True)
-            self.probs_list = probs_list
+            self.probs_list = np.array(probs_list)
             print(probs_list)
             print(self.cur_context)
             self.buff[1:] = self.buff[:-1]
@@ -337,7 +340,14 @@ class Context_Clusterer(object):
                     self.speed_map[cur_context][0] *= 1.0+self.adaptation_factor
                     self.speed_map[cur_context][0] = np.min([self.speed_map[cur_context][0], self.speed_cap])
         else:
-            self.speed_map[cur_context] = [self.speed_init, np.zeros(self.buffer_size) + self.cost]
+            # print('new context', probs_list)
+            if len(probs_list) < 2:
+                self.speed_map[cur_context] = [self.speed_init, np.zeros(self.buffer_size) + self.cost]
+            else:
+                closest_context = np.argsort(probs_list)[-2]
+                newspeed = self.speed_map[closest_context][0]
+                newbuff = self.speed_map[closest_context][1].copy()
+                self.speed_map[cur_context] = [newspeed,newbuff]
             self.num_contexts += 1
 
         if self.viz or self.pub_anchors:
@@ -369,12 +379,13 @@ class Context_Clusterer(object):
             if self.viz:
                 self.ax[2].set_title("CONTEXT: " + str(cur_context))
 
-            if self.pub_anchors:
+            if self.pub_anchors and self.hz_counter % 5 == 0:
                 # vimg =
                 vimg = (self.anchor_dict[cur_context][0]*255).astype(np.uint8)
                 img_msg = self.bridge.cv2_to_imgmsg(vimg, "rgb8")
                 self.anchor_pub.publish(img_msg)
                 # print('here')
+
 
         # print(cur_context)
         # print(self.speed_map)
@@ -398,6 +409,12 @@ class Context_Clusterer(object):
         out_speed = Float32()
         out_speed.data = cmd_speed
         self.max_vel_pub.publish(out_speed)
+
+        arr_msg = Float32MultiArray()
+        arr_msg.data = probs_list
+        self.context_array_publisher.publish(arr_msg)
+
+
         print(time.perf_counter() - now, 'time')
 
 if __name__ == "__main__":
