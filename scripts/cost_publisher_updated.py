@@ -3,6 +3,7 @@ import rospy
 from std_msgs.msg import Float32, Float32MultiArray
 from sensor_msgs.msg import Imu, Joy
 #from learned_cost_map.msg import FloatStamped
+from nav_msgs.msg import Odometry
 from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
 from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
 
@@ -166,10 +167,13 @@ class TraversabilityCostNode(object):
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
         rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
+        rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=1)
+        rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
+
 
         # Set up publishers
         self.cost = 0
-        self.cost_publisher = rospy.Publisher('/traversability_cost_desktop', Float32, queue_size=10)
+        self.cost_publisher = rospy.Publisher('/traversability_cost', Float32, queue_size=10)
         self.cost_array_publisher = rospy.Publisher('/traversability_breakdown', Float32MultiArray, queue_size=10)
         self.cost_publisher_baseline = rospy.Publisher('/traversability_cost_baseline', Float32, queue_size=10)
         # self.cost_wheel = rospy.Publisher('/wheel_cost', Float32, queue_size=10)
@@ -228,15 +232,34 @@ class TraversabilityCostNode(object):
         self.joy_cost = 0
         self.shock_cost = 0
 
+        self.diff_cost = 0
+        self.velocity = 0
+
+    def handle_terrain(self,msg):
+        diff = msg.data
+
+        #assume max vel of 8 and max diff of 1 for now
+        mv = 8.0**2
+        md = 1.0
+        maxcost = mv*md
+
+        diff_cost = self.velocity**2 * diff
+
+        self.diff_cost = diff_cost/maxcost
+
+        # print('terraincost', self.diff_cost)
+
+    def handle_odom(self, msg):
+        self.velocity = np.linalg.norm([msg.twist.twist.linear.x,msg.twist.twist.linear.y])
 
     def handle_joy(self, msg):
-        print('axes', msg.axes[2])
+        # print('axes', msg.axes[2])
         self.bufferJoy.insert(msg.axes[2])
 
         # print(self.bufferJoy.data)
         cost = cost_function(self.bufferJoy.data, 8, self.cost_name, self.cost_stats, freq_range=[.1, 10], num_bins=None)
         # cost = np.var(self.bufferJoy.data)
-        print('cost', cost)
+        # print('cost', cost)
 
 
         self.joy_cost = self.joy_cost + (cost - self.joy_cost)*.05
@@ -314,7 +337,9 @@ class TraversabilityCostNode(object):
 
         # cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*.4
 
-        cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075
+        cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075 + self.diff_cost
+        # cost = (self.diff_cost)*.075
+
 
         # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
 
@@ -334,7 +359,7 @@ class TraversabilityCostNode(object):
         self.cost_publisher.publish(cost_msg)
         print("Published cost!")
 
-        array = [costZ*.8 , costRoll*1700 , costPitch*800 , costX*.0 , costY*.0 , self.joy_cost*10, self.shock_cost*350]
+        array = [costZ*.8 , costRoll*1700 , costPitch*800 , costX*.0 , costY*.0 , self.joy_cost*10, self.shock_cost*350, self.diff_cost]
         # print(array)
         arr_msg = Float32MultiArray()
         arr_msg.data = array
@@ -356,8 +381,8 @@ class TraversabilityCostNode(object):
         # self.cost_publisher_baseline.publish(cost_msg)
 
     def handle_shock(self, msg):
-        print("-----")
-        print("Received Shock message")
+        # print("-----")
+        # print("Received Shock message")
         # self.buffer.insert(msg.linear_acceleration.z + np.abs(msg.angular_velocity.x))
         # print(msg.front_left)
         self.bufferL.insert(msg.rear_left)

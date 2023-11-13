@@ -8,6 +8,9 @@
         <param name="cost_stats_dir" value="wanda_cost_statistics.yaml"/>
 	</node>
 
+	<node pkg="context_adaptation" type="terrain_mismatch.py" name="terrain_mismatch" output="screen">
+	</node>
+
 	<!-- # cost_topic = '/traversability_cost'
 	# odom_topic = '/lester/odom'
 	# im_topic = '/lester/stereo_left/image_rect_color/compressed' -->

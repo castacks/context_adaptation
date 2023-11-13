@@ -167,6 +167,7 @@ ${catkin_INCLUDE_DIRS}
 catkin_install_python(PROGRAMS
    scripts/cost_publisher.py
    scripts/cost_publisher_updated.py
+   scripts/terrain_mismatch.py
 
    scripts/dino_context_clustering.py
 
