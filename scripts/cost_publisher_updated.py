@@ -167,7 +167,7 @@ class TraversabilityCostNode(object):
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
         rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
-        rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=1)
+        rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
         rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
 
 
@@ -239,15 +239,16 @@ class TraversabilityCostNode(object):
         diff = msg.data
 
         #assume max vel of 8 and max diff of 1 for now
-        mv = 8.0**2
+        mv = 8.0
         md = 1.0
         maxcost = mv*md
 
-        diff_cost = self.velocity**2 * diff
+        diff_cost = self.velocity * diff
 
         self.diff_cost = diff_cost/maxcost
 
-        # print('terraincost', self.diff_cost)
+        # print('*\n*\n**\n*\n***terraincost', self.diff_cost)
+
 
     def handle_odom(self, msg):
         self.velocity = np.linalg.norm([msg.twist.twist.linear.x,msg.twist.twist.linear.y])
@@ -337,7 +338,7 @@ class TraversabilityCostNode(object):
 
         # cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*.4
 
-        cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075 + self.diff_cost
+        cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075 + self.diff_cost*8
         # cost = (self.diff_cost)*.075
 
 
@@ -346,7 +347,7 @@ class TraversabilityCostNode(object):
 
 
         # print(costX)
-        print(f"Publishing cost: {cost}")
+        print(f"Publishing cost: {cost}", self.diff_cost)
         cost_msg = Float32()
         #cost_msg.header = msg.header
 

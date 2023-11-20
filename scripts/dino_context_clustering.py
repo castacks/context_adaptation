@@ -431,7 +431,7 @@ if __name__ == "__main__":
     vel_pub_topic = rospy.get_param("~vel_pub_topic")
 
     rp = rospkg.RosPack()
-    config_file = os.path.join(rp.get_path("context_adaptation"), "assets","context_configs") + '/' + config_file
+    # config_file = os.path.join(rp.get_path("context_adaptation"), "assets","context_configs") + '/' + config_file
     config_dict = yaml.safe_load(open(config_file, 'r'))
 
     node = Context_Clusterer(cost_topic, odom_topic , im_topic, context_topic, vel_pub_topic, config_dict, viz=viz, pub_anchors = pub_anchors, pub_stats=pub_stats)

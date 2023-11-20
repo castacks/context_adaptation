@@ -5,8 +5,8 @@ VLAD:
   model: "dinov2_vitb14"
   desc_layer: 10
 ONLINE_CLUSTERING:
-  cluster_similarity_threshold: .5
-  subcluster_similarity_threshold: .38
+  cluster_similarity_threshold: .65
+  subcluster_similarity_threshold: .5
   pair_similarity_maximum: 1.0
   # n_clusters: 3
   # sname: 'context_clusters/DINO_IM224_ln10_CROP_20_feats_holdout_2_not_turnpike_reduced'
@@ -16,11 +16,11 @@ ONLINE_CLUSTERING:
   # n_vectors: 10000
 BEHAVIOR:
   mode_filter_size: 10
-  buffer_size: 100
+  buffer_size: 15
   speed_init: 3.0
-  max_cost: .2
-  velocity_margin: 2.8 #high on bag playback since we don't control speed
-  adaptation_factor: .005
+  max_cost: .32
+  velocity_margin: .8 #high on bag playback since we don't control speed
+  adaptation_factor: .001
   speed_cap: 5.5
   weighted_avg_speed: False
 MISC:

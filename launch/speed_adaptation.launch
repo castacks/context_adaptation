@@ -3,15 +3,16 @@
 <launch>
     <!-- File management -->
     <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
+    <arg name="config_fp" default="CC_big_model_new_config.yaml"/>
 
 	<node pkg="context_adaptation" type="dino_context_clustering.py" name="context_clustering" output="screen">
-        <param name="config_file" value="CC_big_model_new_config.yaml"/>
+        <param name="config_file" value="$(find context_adaptation)/assets/context_configs/$(arg config_fp)"/>
 
 				<param name="cost_topic" value="/traversability_cost"/>
 				<param name="odom_topic" value="/odometry/filtered_odom"/>
 				<param name="im_topic" value="/multisense/left/image_rect_color"/>
 				<param name="context_topic" value="/context_id"/>
-				<param name="vel_pub_topic" value="/controller/target_input_desktop"/>
+				<param name="vel_pub_topic" value="/controller/target_input"/>
 
 				<param name="viz" value='False'/>
 				<param name="pub_anchors" value='True'/>
