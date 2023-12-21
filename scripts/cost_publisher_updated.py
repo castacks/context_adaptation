@@ -360,7 +360,7 @@ class TraversabilityCostNode(object):
         self.cost_publisher.publish(cost_msg)
         print("Published cost!")
 
-        array = [costZ*.8 , costRoll*1700 , costPitch*800 , costX*.0 , costY*.0 , self.joy_cost*10, self.shock_cost*350, self.diff_cost]
+        array = [costZ, costRoll, costPitch, costX, costY, self.joy_cost, self.shock_cost, self.diff_cost]
         # print(array)
         arr_msg = Float32MultiArray()
         arr_msg.data = array
