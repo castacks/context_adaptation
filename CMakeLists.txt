@@ -170,6 +170,7 @@ catkin_install_python(PROGRAMS
    scripts/terrain_mismatch.py
 
    scripts/dino_context_clustering.py
+   scripts/dino_costmap.py
 
    #src/context_adaptation_common/anyloc_utils.py
    #src/context_adaptation_common/links_cluster.py

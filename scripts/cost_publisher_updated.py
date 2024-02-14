@@ -5,7 +5,7 @@ from sensor_msgs.msg import Imu, Joy
 #from learned_cost_map.msg import FloatStamped
 from nav_msgs.msg import Odometry
 from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
-from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
+# from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
 
 import numpy as np
 
@@ -18,6 +18,9 @@ import os
 import yaml
 
 import rospkg
+
+# import pywt
+import time
 
 class Buffer:
     '''Maintains a scrolling buffer to maintain a window of data in memory
@@ -165,7 +168,7 @@ class TraversabilityCostNode(object):
         rospy.Subscriber('/novatel/imu/data', Imu, self.handle_imu, queue_size=1)
         rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
-        rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
+        # rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
         rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
         rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
@@ -179,17 +182,17 @@ class TraversabilityCostNode(object):
         # self.cost_wheel = rospy.Publisher('/wheel_cost', Float32, queue_size=10)
         # self.cost_curv = rospy.Publisher('/curv_cost', Float32, queue_size=10)
 
-
+        self.params = {'IMU_min_freq': 1, 'IMU_max_freq': 10, 'shock_min_freq': 4, 'shock_max_freq': 15, 'mean_mult': 0, 'shock_mult': 0, 'cutoff_factor': 0.3}
 
         # Set data buffer
         pad_val = Imu()
         pad_val.linear_acceleration.z = 9.81
         self.imu_freq = 100
         self.shock_freq = 50
-        self.num_secs = 2
+        self.num_secs = 1
         self.buffer_size = int(self.num_secs*self.imu_freq)  # num_seconds*imu_freq
         self.shock_buff_size = int(self.num_secs*self.shock_freq)  # num_seconds*imu_freq
-        self.shock_mult = 350
+        self.shock_mult = self.params['shock_mult']
         self.shock_max = 1
         self.bufferZ = Buffer(self.buffer_size, padded=True, pad_val=pad_val.linear_acceleration.z)
         self.bufferX = Buffer(self.buffer_size, padded=True, pad_val=0)
@@ -234,6 +237,8 @@ class TraversabilityCostNode(object):
 
         self.diff_cost = 0
         self.velocity = 0
+
+        self.cwt_cost = 0
 
     def handle_terrain(self,msg):
         diff = msg.data
@@ -340,10 +345,44 @@ class TraversabilityCostNode(object):
 
         cost = (costZ*.8 + costRoll*1700 + costPitch*800 + costX*.0 + costY*.0 + self.joy_cost*10 + self.shock_cost*350)*.075 + self.diff_cost*8
         # cost = (self.diff_cost)*.075
+        # print(self.joy_cost)
+        baseline_cost = cost
 
+        bp = bandpower(self.bufferZ.data, self.imu_freq, band=[self.params['IMU_min_freq'], self.params['IMU_max_freq']], window_sec=self.num_secs)
+
+        MEAN = np.mean(np.abs(self.bufferRoll.data)) + np.mean(np.abs(self.bufferPitch.data))
+        bp += MEAN*self.params['mean_mult']
+
+        sbp = self.shock_cost * self.params['shock_mult']
+        # print(bp, sbp)
+        bp += sbp
+
+        bp = (bp - .0284)/8.667
+        bp = np.clip(bp,0,1)
+        cost = bp
+        # cost = baseline_cost
 
         # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
+        # now = time.perf_counter()
+        # mor_freqs = 0.16 * 2**np.arange(6)
+        # frequencies = np.array([100, 50, 33.33333333, 25,15,10,5,1,.8]) / self.imu_freq # normalize
+        # frequencies = np.array([8,7,6]) / self.imu_freq # normalize
+        #
+        # scales = pywt.frequency2scale('morl', frequencies)
+        # # scales = pywt.frequency2scale('morl', mor_freqs)
+        # # print(scales)
+        # # scales = [10,50,100]
+        # cwt_coeffs,_ = pywt.cwt(self.bufferZ.data, scales, 'morl')
+        # # print(cwt_coeffs.shape, self.bufferZ.data.shape)
+        # cwt_cost = np.sum(cwt_coeffs[:,-1]**2/scales)
+        # cwt_cost = np.mean(np.abs(self.bufferPitch.data[-50:])) + np.mean(np.abs(self.bufferRoll.data[-50:])) + np.mean(np.abs(self.bufferZ.data[-50:]))
+        # self.cwt_cost = self.cwt_cost + (cwt_cost - self.cwt_cost) * .5
 
+        # cwt_cost = np.sum(cwt_coeffs[:,-1])
+        # print(now - time.perf_counter(), '. t')
+        # print((cwt_coeffs[:,-1]**2/scales).shape)
+        # cwt_cost = np.sum(np.mean(cwt_coeffs,axis=1)**2/scales)
+        # print("CWT: ", cwt_cost)
 
 
         # print(costX)
@@ -373,8 +412,9 @@ class TraversabilityCostNode(object):
         # # else:
         # #     cost = 0
         #
-        # cost_msg.data = cost
-        # self.cost_publisher_baseline.publish(cost_msg)
+        # cost_msg.data = self.cwt_cost/10
+        cost_msg.data = baseline_cost
+        self.cost_publisher_baseline.publish(cost_msg)
         # print("Published cost!")
 
         #self.min_freq
@@ -387,18 +427,23 @@ class TraversabilityCostNode(object):
         # self.buffer.insert(msg.linear_acceleration.z + np.abs(msg.angular_velocity.x))
         # print(msg.front_left)
         self.bufferL.insert(msg.rear_left)
-        self.bufferR.insert(msg.rear_right)
+        # self.bufferR.insert(msg.rear_right)
 
         # print('here')
         # cost = cost_function(self.buffer.data, self.imu_freq, self.cost_name, self.cost_stats, freq_range=None, num_bins=self.num_bins)
-        costL = cost_function(self.bufferL.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[2, self.max_freq], num_bins=None)
-        costR = cost_function(self.bufferR.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[2, self.max_freq], num_bins=None)
-        cost = costL + costR
+        # costL = cost_function(self.bufferL.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[5, self.max_freq], num_bins=None)
+        # costR = cost_function(self.bufferR.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[5, self.max_freq], num_bins=None)
+        # cost = costL + costR
+
+        # costL = cost_function(self.bufferL.data, self.shock_freq, self.cost_name, self.cost_stats, freq_range=[5, self.max_freq], num_bins=None)
+        costL = bandpower(self.bufferL.data, self.shock_freq, band=[self.params['shock_min_freq'], self.params['shock_max_freq']], window_sec=self.num_secs)
+
         #
         # cost *= self.shock_mult
         # cost = min(cost,self.shock_max)
 
-        self.shock_cost = self.shock_cost + (cost - self.shock_cost)*.3
+        # self.shock_cost = self.shock_cost + (cost - self.shock_cost)*.3
+        self.shock_cost = costL
 
 
 

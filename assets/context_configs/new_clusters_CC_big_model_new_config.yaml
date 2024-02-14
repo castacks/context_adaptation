@@ -1,0 +1,56 @@
+---
+# VLAD:
+#   n_clusters: 10
+#   cache_dir: 'dino_clusters/VITB_all_gascola_10'
+#   model: "dinov2_vitb14"
+#   desc_layer: 10
+# ONLINE_CLUSTERING:
+#   cluster_similarity_threshold: .8
+#   subcluster_similarity_threshold: .6
+#   pair_similarity_maximum: 1.0
+VLAD:
+  n_clusters: 14
+  cache_dir: 'dino_clusters/14_clusters_532'
+  model: "dinov2_vitb14"
+  desc_layer: 10
+ONLINE_CLUSTERING:
+  cluster_similarity_threshold: .8
+  subcluster_similarity_threshold: .6
+  pair_similarity_maximum: 1.0
+  # n_clusters: 3
+  # sname: 'context_clusters/DINO_IM224_ln10_CROP_20_feats_holdout_2_not_turnpike_reduced'
+  # cluster_similarity_threshold: .5
+  # subcluster_similarity_threshold: .3
+  # pair_similarity_maximum: 1.0
+  # n_vectors: 10000
+BEHAVIOR:
+  mode_filter_size: 10
+  buffer_size: 15
+  speed_init: 3.0
+  max_cost: .32
+  velocity_margin: .8 #high on bag playback since we don't control speed
+  adaptation_factor: .001
+  speed_cap: 5.5
+  weighted_avg_speed: False
+MISC:
+  update_freq: 5
+  image_size: 532
+
+
+#not bad, maybe should limit how frequently we cluster
+  # cluster_similarity_threshold: .2
+  # subcluster_similarity_threshold: .16
+  # pair_similarity_maximum: 1.0
+  # n_vectors: 1000
+
+  # not bad either/
+    # cluster_similarity_threshold: .6
+    # subcluster_similarity_threshold: .3
+    # pair_similarity_maximum: 1.0
+    # n_vectors: 10000
+
+
+#alright no init
+  # cluster_similarity_threshold: .4
+  # subcluster_similarity_threshold: .38
+  # pair_similarity_maximum: 1.0
