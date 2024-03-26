@@ -8,7 +8,7 @@ import math
 from std_msgs.msg import Float32
 from grid_map_msgs.msg import GridMap
 from nav_msgs.msg import Odometry
-import skimage
+# import skimage
 import time
 import cv2
 import yaml

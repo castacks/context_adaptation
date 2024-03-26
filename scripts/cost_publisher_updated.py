@@ -5,7 +5,7 @@ from sensor_msgs.msg import Imu, Joy
 #from learned_cost_map.msg import FloatStamped
 from nav_msgs.msg import Odometry
 from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
-# from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
+from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
 
 import numpy as np
 
@@ -168,7 +168,7 @@ class TraversabilityCostNode(object):
         rospy.Subscriber('/novatel/imu/data', Imu, self.handle_imu, queue_size=1)
         rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
-        # rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
+        rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
         rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
         rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
@@ -184,7 +184,9 @@ class TraversabilityCostNode(object):
 
         # self.params = {'IMU_min_freq': 1, 'IMU_max_freq': 10, 'shock_min_freq': 4, 'shock_max_freq': 15, 'mean_mult': 0, 'shock_mult': 0, 'cutoff_factor': 0.3}
         # self.params = {'IMU_min_freq': 13, 'IMU_max_freq': 21, 'shock_min_freq': 0, 'shock_max_freq': 43, 'mean_mult': 7, 'shock_mult': 30, 'cutoff_factor': 0.5}
-        self.params = {'IMU_min_freq': {'z': 2, 'y': 12, 'x': 7}, 'IMU_max_freq': {'z': 46, 'y': 36, 'x': 13}, 'IMU_mult': {'z': 1.0, 'y': 0.3, 'x': 0.3}, 'shock_min_freq': 0, 'shock_max_freq': 24, 'mean_mult': 0.1, 'shock_mult': 0.8, 'cutoff_factor': 0.6, 'ALL_MAX': 0.08281747515071684, 'ALL_MIN': 0.0031987638810578706, 'ALL_AVG': 0.016374639824156868}
+        # self.params = {'IMU_min_freq': {'z': 2, 'y': 12, 'x': 7}, 'IMU_max_freq': {'z': 46, 'y': 36, 'x': 13}, 'IMU_mult': {'z': 1.0, 'y': 0.3, 'x': 0.3}, 'shock_min_freq': 0, 'shock_max_freq': 24, 'mean_mult': 0.05, 'shock_mult': 0.8, 'cutoff_factor': 0.6, 'ALL_MAX': 0.08281747515071684, 'ALL_MIN': 0.0031987638810578706, 'ALL_AVG': 0.016374639824156868}
+
+        self.params = {'IMU_min_freq': {'z': 2, 'y': 9, 'x': 0}, 'IMU_max_freq': {'z': 30, 'y': 13, 'x': 22}, 'IMU_mult': {'z': 1.0, 'y': 0.7, 'x': 0.6}, 'shock_min_freq': 0, 'shock_max_freq': 46, 'mean_mult': 0.1, 'shock_mult': 0.5, 'cutoff_factor': 0.6, 'ALL_MAX': 0.09220535518703862, 'ALL_MIN': 0.002474401263335543, 'ALL_AVG': 0.019438000929697122}
 
         self.stats = {'IMU_MIN': [-0.5554102710448205, -0.6436653784476221, -0.5440625478513539, -16.969271264076234, -20.00854387164116, -4.090186840295792], 'IMU_MAX': [0.5882288794964552, 0.5955823929980397, 0.6560320965945721, 16.157508494853975, 37.19758415222168, 23.688631061911583], 'SHOCK_MIN': [4.366000175476074, 4.552999973297119], 'SHOCK_MAX': [6.920000076293945, 7.138999938964844]}
 
@@ -247,6 +249,8 @@ class TraversabilityCostNode(object):
 
         self.diff_cost = 0
         self.velocity = 0
+        self.vel_mismatch = 0.0
+        self.desired_vel = 0.0
 
         self.cwt_cost = 0
 
@@ -268,6 +272,14 @@ class TraversabilityCostNode(object):
     def handle_odom(self, msg):
         self.velocity = np.linalg.norm([msg.twist.twist.linear.x,msg.twist.twist.linear.y])
 
+        mismatch = np.abs(self.velocity - self.desired_vel)
+        # out_msg = Float32()
+
+        self.vel_mismatch = self.vel_mismatch + (mismatch - self.vel_mismatch)*.5
+        # out_msg.data = self.mismatch
+
+        # self.mismatch_publisher.publish(out_msg)
+
     def handle_joy(self, msg):
         # print('axes', msg.axes[2])
         self.bufferJoy.insert(msg.axes[2])
@@ -286,9 +298,15 @@ class TraversabilityCostNode(object):
         # self.cost_curv.publish(joy_msg)
 
     def handle_stats(self, msg):
-        self.bufferCurv.insert(msg.average_curvature)
 
-        curv_msg = Float32()
+        setpoint = msg.trajectory[0]
+        speed = setpoint.v
+
+        self.desired_vel = speed
+
+        # self.bufferCurv.insert(msg.average_curvature)
+
+        # curv_msg = Float32()
         #cost_msg.header = msg.header
         # curv_msg.data = np.var(self.bufferCurv.data)
         # cost = cost_function(self.bufferCurv.data, 10, self.cost_name, self.cost_stats, freq_range=[self.min_freq, self.max_freq], num_bins=None)
@@ -388,6 +406,8 @@ class TraversabilityCostNode(object):
         bp = np.clip(bp,0,1)
         cost = bp
         # cost = baseline_cost
+
+        cost = .7*cost + self.vel_mismatch + self.diff_cost*.2
 
         # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
         # now = time.perf_counter()

@@ -171,6 +171,8 @@ catkin_install_python(PROGRAMS
 
    scripts/dino_context_clustering.py
    scripts/dino_costmap.py
+   scripts/dino_costmap_gp.py
+   scripts/dino_costmap_gp_pca.py
 
    #src/context_adaptation_common/anyloc_utils.py
    #src/context_adaptation_common/links_cluster.py
