@@ -171,7 +171,8 @@ class TraversabilityCostNode(object):
         rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
         rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
-        rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
+        # rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
+        rospy.Subscriber('/integrated_to_init', Odometry, self.handle_odom, queue_size=1)
 
 
         # Set up publishers
@@ -179,6 +180,7 @@ class TraversabilityCostNode(object):
         self.cost_publisher = rospy.Publisher('/traversability_cost', Float32, queue_size=10)
         self.cost_array_publisher = rospy.Publisher('/traversability_breakdown', Float32MultiArray, queue_size=10)
         self.cost_publisher_baseline = rospy.Publisher('/traversability_cost_baseline', Float32, queue_size=10)
+        self.speed_mismatch_publisher = rospy.Publisher('/speed_mismatch', Float32, queue_size=10)
         # self.cost_wheel = rospy.Publisher('/wheel_cost', Float32, queue_size=10)
         # self.cost_curv = rospy.Publisher('/curv_cost', Float32, queue_size=10)
 
@@ -250,7 +252,7 @@ class TraversabilityCostNode(object):
         self.diff_cost = 0
         self.velocity = 0
         self.vel_mismatch = 0.0
-        self.desired_vel = 0.0
+        self.desired_vel = None
 
         self.cwt_cost = 0
 
@@ -272,11 +274,15 @@ class TraversabilityCostNode(object):
     def handle_odom(self, msg):
         self.velocity = np.linalg.norm([msg.twist.twist.linear.x,msg.twist.twist.linear.y])
 
-        mismatch = np.abs(self.velocity - self.desired_vel)
-        # out_msg = Float32()
+        if self.desired_vel is not None:
+            mismatch = np.abs(self.velocity - self.desired_vel)
+        else:
+            mismatch = 0.0
 
         self.vel_mismatch = self.vel_mismatch + (mismatch - self.vel_mismatch)*.5
-        # out_msg.data = self.mismatch
+        out_msg = Float32()
+        out_msg.data = self.vel_mismatch
+        self.speed_mismatch_publisher.publish(out_msg)
 
         # self.mismatch_publisher.publish(out_msg)
 
