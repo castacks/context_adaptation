@@ -16,10 +16,6 @@ from cv_bridge import CvBridge
 import os
 import yaml
 
-import roslib
-# roslib.load_manifest('learning_tf')
-import rospy
-import numpy as np
 import math
 # import tf
 
@@ -34,17 +30,13 @@ import time
 import cv2
 import yaml
 from yaml.loader import SafeLoader
-# import matplotlib
-# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from scipy import signal, stats
-# from PIL import Image
-# from sklearn.cluster import KMeans
 
 import dynamic_reconfigure.client
 
 import pickle
-from context_adaptation_common.links_cluster import LinksCluster, Subcluster
+from context_adaptation_common.utils import pose_msg_to_se3
 
 import torch
 import torch.nn as nn
@@ -56,7 +48,6 @@ from rosbag_to_dataset.dtypes.gridmap import GridMapConvert
 import gpytorch
 
 import matplotlib
-
 # CMAP = matplotlib.cm.get_cmap('plasma')
 CMAP = matplotlib.cm.get_cmap('magma')
 
@@ -67,7 +58,8 @@ class ExactGPModel(gpytorch.models.ExactGP):
         self.mean_module = gpytorch.means.ConstantMean()
         # self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=train_x.shape[-1]))
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-        self.covar_module.base_kernel.lengthscale = 10.
+        # self.covar_module.base_kernel.lengthscale = 7.
+        self.covar_module.base_kernel.lengthscale = 7
 
     def forward(self, x):
         mean_x = self.mean_module(x)
@@ -107,8 +99,6 @@ class SpectralDeltaGP(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 class Context_Clusterer(object):
-    # def __init__(self,cost_topic, odom_topic, im_topic, output_topic, filter_size=15, buffer_size = 100, speed_init = 3.0, max_cost = .34, velocity_margin = 1.5, speed_cap = 5):
-    # def __init__(self,cost_topic, odom_topic, im_topic, output_topic, filter_size=10, buffer_size = 10, speed_init = 3.0, max_cost = .32, velocity_margin = 1.5, speed_cap = 5):
     def __init__(self,cost_topic, odom_topic , gridmap_topic, costmap_topic, vel_pub_topic, config):
 
         self._lock = Lock()
@@ -138,16 +128,19 @@ class Context_Clusterer(object):
         #
 
 
-        height_diff = -1.85
+        height_diff = -1*config['ROBOT']['frame_height']
+        front_x = config['ROBOT']['front_x']
+        back_x = config['ROBOT']['back_x']
+        width = config['ROBOT']['width']
 
         transform_front_left = np.identity(4)
-        transform_front_left[0:3,-1] = np.array([-0.91-(-1.5), 0-(-0.72), height_diff])
+        transform_front_left[0:3,-1] = np.array([front_x, width, height_diff])
         transform_front_right = np.identity(4)
-        transform_front_right[0:3,-1] = np.array([-0.91-(-1.5), 0-(0.72), height_diff])
+        transform_front_right[0:3,-1] = np.array([front_x, -width, height_diff])
         transform_rear_left = np.identity(4)
-        transform_rear_left[0:3,-1] = np.array([-0.91-(1.5), 0-(-0.72), height_diff])
+        transform_rear_left[0:3,-1] = np.array([back_x, width, height_diff])
         transform_rear_right = np.identity(4)
-        transform_rear_right[0:3,-1] = np.array([-0.91-(1.5), 0-(0.72), height_diff])
+        transform_rear_right[0:3,-1] = np.array([back_x, -width, height_diff])
 
         self.tire_transforms = [transform_front_left, transform_front_right, transform_rear_left, transform_rear_right]
 
@@ -155,16 +148,18 @@ class Context_Clusterer(object):
         self.channels = []
         self.grid_map_cvt = GridMapConvert(channels=self.channels, size=[1, 1])
 
-        # self.cluster_mapping = np.zeros((20,50))
-        self.cluster_means = np.ones(20)
-        self.cluster_counts = np.ones(20)
 
-        self.VLAD_CLUSTS = 8
-        self.gridmap_size = 240
+        #TODO Grab this dynamically as well
+        self.VLAD_CLUSTS = config['VLAD']['n_clusters']
+        self.gridmap_size = None
+
+        self.residual_max = config['BEHAVIOR']['residual_max']
+        self.uc_thresh = config['BEHAVIOR']['uncertainty_threshold']
 
         # self.loss = nn.MSELoss()
         # self.opt = torch.optim.SGD(self.cost_model.parameters(),lr = .00000001)
-        buffer_len = 150
+        buffer_len = config['BEHAVIOR']['buffer_size']
+        self.buffer_update_freq = config['BEHAVIOR']['buffer_update_freq']
         self.train_in_buffer = torch.zeros((buffer_len,self.VLAD_CLUSTS)).cuda()
         self.train_label_buffer = torch.zeros((buffer_len,1)).cuda()
         self.train_buffer_classes = np.zeros((buffer_len))
@@ -189,6 +184,10 @@ class Context_Clusterer(object):
         self.likelihood = None
         self.gp_params = None
 
+        # self.gp_params = torch.load('gp_params')
+        self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_ks_7.pt'))
+        # print(self.gp_params)
+        # print(os.getcwd())
 
         rospy.Subscriber(gridmap_topic, GridMap, self.handle_map, queue_size=5)
 
@@ -205,7 +204,7 @@ class Context_Clusterer(object):
     def handle_odom(self, msg):
         self.velocity = np.linalg.norm([msg.twist.twist.linear.x,msg.twist.twist.linear.y])
         self.odom_msg = msg
-        self.pose_se3 = self.pose_msg_to_se3(msg)
+        self.pose_se3 = pose_msg_to_se3(msg)
 
     def handle_cost(self, msg):
         self.cost = msg.data
@@ -230,10 +229,10 @@ class Context_Clusterer(object):
         self.train_in_buffer[self.buffer_idx] = input
         self.train_label_buffer[self.buffer_idx] = label
         self.train_buffer_classes[self.buffer_idx] = class_id
-        self.buffer_idx = min(self.buffer_idx+1, self.train_in_buffer.shape[0]-1)
+        self.buffer_idx = min(self.buffer_idx+1, self.train_in_buffer.shape[0])
         # print(self.buffer_idx)
         # print("Buffer: " , self.buffer_idx, label)
-        if self.buffer_idx == self.train_in_buffer.shape[0]-1:
+        if self.buffer_idx == self.train_in_buffer.shape[0]:
             self.buffer_full = True
             # self.buffer_idx = 0
 
@@ -250,60 +249,6 @@ class Context_Clusterer(object):
             tire_points[i, 0:3] = (self.pose_se3 @ transform)[0:3, -1]
 
         return tire_points
-
-    def pose_msg_to_se3(self, msg):
-        quaternion_msg = msg.pose.pose.orientation
-        Q = np.array([quaternion_msg.w, quaternion_msg.x, quaternion_msg.y, quaternion_msg.z])
-        rot_mat = self.quaternion_rotation_matrix(Q)
-
-        se3 = np.zeros((4, 4))
-        se3[:3, :3] = rot_mat
-        se3[0, 3] = msg.pose.pose.position.x
-        se3[1, 3] = msg.pose.pose.position.y
-        se3[2, 3] = msg.pose.pose.position.z
-        se3[3, 3] = 1
-
-        return se3
-
-    def quaternion_rotation_matrix(self, Q):
-        """
-        Covert a quaternion into a full three-dimensional rotation matrix. Copied from https://automaticaddison.com/how-to-convert-a-quaternion-to-a-rotation-matrix/
-
-        Input
-        :param Q: A 4 element array representing the quaternion (q0,q1,q2,q3)
-
-        Output
-        :return: A 3x3 element matrix representing the full 3D rotation matrix.
-                This rotation matrix converts a point in the local reference
-                frame to a point in the global reference frame.
-        """
-        # Extract the values from Q
-        q0 = Q[0]
-        q1 = Q[1]
-        q2 = Q[2]
-        q3 = Q[3]
-
-        # First row of the rotation matrix
-        r00 = 2 * (q0 * q0 + q1 * q1) - 1
-        r01 = 2 * (q1 * q2 - q0 * q3)
-        r02 = 2 * (q1 * q3 + q0 * q2)
-
-        # Second row of the rotation matrix
-        r10 = 2 * (q1 * q2 + q0 * q3)
-        r11 = 2 * (q0 * q0 + q2 * q2) - 1
-        r12 = 2 * (q2 * q3 - q0 * q1)
-
-        # Third row of the rotation matrix
-        r20 = 2 * (q1 * q3 - q0 * q2)
-        r21 = 2 * (q2 * q3 + q0 * q1)
-        r22 = 2 * (q0 * q0 + q3 * q3) - 1
-
-        # 3x3 rotation matrix
-        rot_matrix = np.array([[r00, r01, r02],
-                            [r10, r11, r12],
-                            [r20, r21, r22]])
-
-        return rot_matrix
 
     def run_map(self, event):
         now = time.perf_counter()
@@ -323,6 +268,10 @@ class Context_Clusterer(object):
                 ny = int(info.length_y / info.resolution)
                 self.grid_map_cvt.size = [nx, ny]
 
+                #HACK assumes square for now
+                self.gridmap_size = nx
+                # print("$$$$$$$$$$$$$$$$$", nx)
+
                 gridmap = self.grid_map_cvt.ros_to_numpy(self.dino_map)
 
                 msg_header = self.dino_map.info.header
@@ -341,8 +290,8 @@ class Context_Clusterer(object):
 
         # print(gridmap['data'][:,120,120]/26.)
         # print(np.max(unc_map))
-        unc_map /= 26.
-        unc_map[unc_map < .82] = 0
+        unc_map /= self.residual_max
+        unc_map[unc_map < self.uc_thresh] = 0
 
         P = gridmap['origin']
         res = gridmap['resolution']
@@ -354,56 +303,31 @@ class Context_Clusterer(object):
         classes = da[xloc,yloc]
         spot = stats.mode(classes)[0]
 
-        input = torch.tensor(gridmap['data']/26.).cuda()
+        input = torch.tensor(gridmap['data']/self.residual_max).cuda()
         # tinput = torch.tensor(gridmap['data']).cuda()
         # input = (tinput - tinput.mean())/tinput.std()
         # print(input.shape)
         # print(input[:,xloc,yloc])
 
-        if self.hz_counter % 2 == 0:
+        if self.hz_counter % self.buffer_update_freq == 0:
             input_sample = input[:,xloc[0],yloc[0]]
             if torch.count_nonzero(input_sample) == 0:
                 print("IN UNKOWN SPACE")
             else:
                 if self.buffer_full:
-                    # print("))))))))))))))))))))))))))))))))))))))))))))))))))")
+                    print("))))))))))))))))))))))))))))))))))))))))))))))))))")
                     most_class = stats.mode(self.train_buffer_classes)[0]
                     # print(np.where(self.train_buffer_classes == most_class)[0])
                     # print(np.histogram(self.train_buffer_classes))
                     insert_idx = np.random.choice(np.where(self.train_buffer_classes == most_class)[0])
                     # insert_idx = torch.argmin(torch.abs(self.train_label_buffer - self.cost))
+                    # print(input_sample)
                     self.insert_train_buffer(input_sample, self.cost, spot, insert_idx)
-                    # self.update_train_buffer(input[:,xloc[0],yloc[0]], self.cost, spot)
+                    # self.update_train_buffer(input_sample, self.cost, spot)
                 else:
                     self.update_train_buffer(input_sample, self.cost, spot)
 
-        costmap = np.zeros((240,240))
-        # if self.buffer_full:
-        #     train_out = self.cost_model(self.train_in_buffer)
-        #     # print("TRAINING")
-        #     loss = self.loss(train_out[:,0], self.train_label_buffer[:,0])
-        #     # print(train_out.shape,self.train_label_buffer.shape)
-        #     # print(train_out[:,0],self.train_label_buffer[:,0])
-        #     self.opt.zero_grad()
-        #     loss.backward()
-        #     self.opt.step()
-        #     print("LOSS: ", loss.item())
-        #     with torch.no_grad():
-        #         prediction = self.cost_model(input.permute(1,2,0).view(-1,8)).reshape(200,200)
-        #         costmap = prediction.cpu().numpy()
-        #         # print(prediction.shape)
-        #         # cost_img = F.interpolate(cost_img[None, None, ...].to(float),
-        #         #     (img.shape[0],img.shape[1]), mode='nearest')[0, 0].cpu().numpy()
-        #         # # print(cost_img.shape)
-        #         # cost_img /= np.max(cost_img)
-        #         # # print(np.mean(cost_img))
-        #         # timg[:,:,0] += cost_img
-        #         #
-        #         # print(cost_img.max(), cost_img.min(), cost_img.mean())
-        #         #
-        #         # # timg[:,:,0] += cost_img * 2
-        #         #
-        #         # timg[:,:,0] = np.clip(timg[:,:,0],0,1)
+        costmap = np.zeros((self.gridmap_size,self.gridmap_size))
 
         # if self.buffer_full:
         if self.hz_counter % 10 == 0 or self.gp is None:
@@ -413,44 +337,51 @@ class Context_Clusterer(object):
             if not self.buffer_full:
                 train_in_buffer = self.train_in_buffer[:self.buffer_idx]
                 train_label_buffer = self.train_label_buffer[:self.buffer_idx,0]
+                train_buffer_classes = self.train_buffer_classes[:self.buffer_idx]
             else:
                 train_in_buffer = self.train_in_buffer
                 train_label_buffer = self.train_label_buffer[:,0]
+                train_buffer_classes = self.train_buffer_classes
+            # print(np.histogram(train_buffer_classes))
+            # print(train_in_buffer, train_in_buffer.shape)
             self.in_mean = torch.mean(train_in_buffer, dim = 0)
             self.in_std = torch.std(train_in_buffer, dim = 0)
             train_in_buffer = (train_in_buffer - self.in_mean)/self.in_std
             self.gp = ExactGPModel(train_in_buffer, train_label_buffer, self.likelihood).cuda()
-            # self.gp = SpectralMixtureGPModel(self.train_in_buffer, self.train_label_buffer[:,0], self.likelihood)
             if self.gp_params is not None:
                 self.gp.load_state_dict(self.gp_params)
-            # self.gp = SpectralDeltaGP(self.train_in_buffer.T, self.train_label_buffer[:,0], num_deltas=1500)
             # print(self.gp.parameters())
-        else:
-            if not self.buffer_full:
-                train_in_buffer = self.train_in_buffer[:self.buffer_idx]
-                train_label_buffer = self.train_label_buffer[:self.buffer_idx,0]
-            else:
-                train_in_buffer = self.train_in_buffer
-                train_label_buffer = self.train_label_buffer[:,0]
-
-            # print(train_in_buffer.shape)
-
-            if train_in_buffer.shape[0] < 3: #self.buffer_idx > 10:
-                return
-
-            # print(train_in_buffer, train_label_buffer)
-
-            optimizer = torch.optim.SGD(self.gp.parameters(), lr=0.0001)
-            mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.gp)
-            optimizer.zero_grad()
-            output = self.gp(train_in_buffer)
-            loss = -mll(output, train_label_buffer)
-            print("LOSS - ", loss.item())
-            # print("PARAMS ", self.gp.covar_module)
-            loss.backward()
-            optimizer.step()
-
-            self.gp_params = self.gp.state_dict()
+        # else:
+        #     if not self.buffer_full:
+        #         train_in_buffer = self.train_in_buffer[:self.buffer_idx]
+        #         train_label_buffer = self.train_label_buffer[:self.buffer_idx,0]
+        #     else:
+        #         train_in_buffer = self.train_in_buffer
+        #         train_label_buffer = self.train_label_buffer[:,0]
+        #
+        #     # print(train_in_buffer.shape)
+        #
+        #     if train_in_buffer.shape[0] < 3: #self.buffer_idx > 10:
+        #         return
+        #
+        #     # print(train_in_buffer, train_label_buffer)
+        #
+        #     optimizer = torch.optim.SGD(self.gp.parameters(), lr=0.01)
+        #     mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.gp)
+        #     optimizer.zero_grad()
+        #     output = self.gp(train_in_buffer)
+        #     loss = -mll(output, train_label_buffer)
+        #     print("LOSS - ", loss.item())
+        #     # print("PARAMS ", self.gp.covar_module)
+        #     if not torch.isnan(loss):
+        #         loss.backward()
+        #         optimizer.step()
+        #
+        #     self.gp_params = self.gp.state_dict()
+        # #
+        # if self.hz_counter % 20 == 0 and self.gp_params is not None:
+        #     print(self.gp_params)
+        #     torch.save(self.gp_params, 'gp_params')
         # print("LOSS: ", loss.item())
         with torch.no_grad():
             self.gp.eval()
@@ -470,21 +401,6 @@ class Context_Clusterer(object):
                 # print(observed_pred.shape)
 
 
-
-        # print('********', costmap.min(),costmap.max())
-        # costmap = da/da.max()
-        # self.cluster_mapping[spot,1:] = self.cluster_mapping[spot,:-1]
-        # self.cluster_mapping[spot,0] = self.cost
-        # means = np.mean(self.cluster_mapping,axis=1)
-        # means[means == 0] = 1
-
-        self.cluster_counts[spot] += 1
-        alpha = 1./(1+self.cluster_counts[spot])
-        self.cluster_means[spot] = alpha * self.cost + (1.-alpha)*self.cluster_means[spot]
-
-        roughness_map = self.cluster_means[da]
-        # print(self.cluster_means)
-
         # costmap = (unc_map + costmap)/2.0
         costmap /= 2.0
         ids = np.where(unc_map != 0)
@@ -493,13 +409,15 @@ class Context_Clusterer(object):
 
         var_min = costmap_var.min()
         var_max = costmap_var.max()
-        # var_min = .5
-        # var_max = 1.5
-        # print('###', var_min, var_max)
-        # # costmap[xloc,yloc] = 1
-        var_viz = (costmap_var - var_min)/(var_max-var_min)
+        # var_min = .2
+        # var_max = .3
+        print('###', var_min, var_max)
 
-        costmap_msg = self.costmap_to_gridmap(costmap, info)
+        var_viz = (costmap_var - var_min)/(var_max-var_min)
+        var_viz = np.clip(var_viz,0,1)
+        # var_viz[xloc,yloc] = 1
+
+        costmap_msg = self.costmap_to_gridmap(var_viz, info)
         self.costmap_pub.publish(costmap_msg)
 
 
@@ -567,7 +485,11 @@ class Context_Clusterer(object):
         gridmap_layer_msg.data = layer_data.flatten()
         costmap_msg.data.append(gridmap_layer_msg)
 
-        gridmap_cs = (CMAP(costmap) * 255).astype(np.int32)
+        # vcostmap = np.clip(costmap*2.,0,1)
+        vcostmap = np.clip(costmap*2.,0,.6)/.6
+        # vcostmap = costmap
+
+        gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
         gridmap_color = gridmap_cs[..., 0] * (2**16) + gridmap_cs[..., 1] * (2**8) + gridmap_cs[..., 2]
         gridmap_color = gridmap_color.view(dtype=np.float32)
 

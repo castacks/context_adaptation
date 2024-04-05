@@ -1,0 +1,22 @@
+---
+ROBOT:
+  frame_height: 1.85
+  front_x: .59 #-0.91-(-1.5)
+  back_x: -2.41 #-0.91-(1.5)
+  width: .72
+VLAD:
+  n_clusters: 8
+BEHAVIOR:
+  buffer_size: 150
+  residual_max: 26.0
+  uncertainty_threshold: .9
+  buffer_update_freq: 2
+  # speed_init: 3.0
+  # max_cost: .32
+  # velocity_margin: .8 #high on bag playback since we don't control speed
+  # adaptation_factor: .001
+  # speed_cap: 5.5
+  # weighted_avg_speed: False
+MISC:
+  update_freq: 5
+  image_size: 532

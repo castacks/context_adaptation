@@ -4,12 +4,12 @@
     <!-- File management -->
     <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
     <!-- <arg name="config_fp" default="CC_big_model_new_config.yaml"/> -->
-    <arg name="config_fp" default="new_clusters_CC_big_model_new_config.yaml"/>
+    <arg name="config_fp" default="GP_base.yaml"/>
 
-	<!-- <node pkg="context_adaptation" type="dino_costmap_gp.py" name="context_clustering" output="screen"> -->
-  <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen">
+	<node pkg="context_adaptation" type="dino_costmap_gp.py" name="context_clustering" output="screen">
+  <!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
 
-        <param name="config_file" value="$(find context_adaptation)/assets/context_configs/$(arg config_fp)"/>
+        <param name="config_file" value="$(find context_adaptation)/assets/costmap_configs/$(arg config_fp)"/>
 
 				<param name="cost_topic" value="/traversability_cost"/>
 				<param name="odom_topic" value="/integrated_to_init"/>
