@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+
+<launch>
+    <!-- File management -->
+    <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
+    <!-- <arg name="config_fp" default="CC_big_model_new_config.yaml"/> -->
+    <arg name="config_fp" default="GP_base.yaml"/>
+
+	<node pkg="context_adaptation" type="dino_costmap_gp_speedmap.py" name="context_clustering" output="screen">
+  <!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
+
+        <param name="config_file" value="$(find context_adaptation)/assets/costmap_configs/$(arg config_fp)"/>
+
+				<param name="cost_topic" value="/traversability_cost"/>
+				<param name="odom_topic" value="/integrated_to_init"/>
+				<param name="gridmap_topic" value="/dino_gridmap"/>
+				<param name="costmap_topic" value="/shortrange_costmap"/>
+        <param name="speedmap_in_topic" value="/local_speedmap"/>
+        <param name="speedmap_out_topic" value="/shortrange_speedmap"/>
+				<param name="vel_pub_topic" value="/controller/target_input"/>
+
+				<param name="viz" value='False'/>
+				<param name="pub_anchors" value='False'/>
+				<param name="pub_stats" value='True'/>
+	</node>
+
+  <node pkg="context_adaptation" type="cost_publisher_updated.py" name="roughness_cost">
+        <param name="cost_stats_dir" value="wanda_cost_statistics.yaml"/>
+	</node>
+
+  <node pkg="context_adaptation" type="terrain_mismatch.py" name="terrain_mismatch" output="screen">
+	</node>
+	<!-- # cost_topic = '/traversability_cost'
+	# odom_topic = '/lester/odom'
+	# im_topic = '/lester/stereo_left/image_rect_color/compressed' -->
+
+</launch>
