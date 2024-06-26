@@ -6,7 +6,16 @@
     <!-- <arg name="config_fp" default="CC_big_model_new_config.yaml"/> -->
     <arg name="config_fp" default="GP_base.yaml"/>
 
-	<node pkg="context_adaptation" type="dino_costmap_gp.py" name="context_clustering" output="screen">
+	<!-- <node pkg="context_adaptation" type="dino_costmap_gp.py" name="context_clustering" output="screen"> -->
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_input.py" name="context_clustering" output="screen"> -->
+
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_output.py" name="context_clustering" output="screen"> -->
+  <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output.py" name="context_clustering" output="screen">
+
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_latent_input.py" name="context_clustering" output="screen"> -->
+
+
+
   <!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
 
         <param name="config_file" value="$(find context_adaptation)/assets/costmap_configs/$(arg config_fp)"/>

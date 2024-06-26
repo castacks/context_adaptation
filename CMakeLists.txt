@@ -175,6 +175,11 @@ catkin_install_python(PROGRAMS
    #scripts/dino_costmap_gp_pca.py
    scripts/dino_costmap_gp_speedmap.py
    scripts/dino_costmap_gp_speed_input.py
+   #scripts/dino_costmap_gp_speed_output.py
+   #scripts/dino_costmap_gp_speed_input_deepgp.py
+   #scripts/dino_costmap_gp_latent_input.py
+   scripts/dino_costmap_gp_speed_input_output.py
+
 
    #src/context_adaptation_common/anyloc_utils.py
    #src/context_adaptation_common/links_cluster.py

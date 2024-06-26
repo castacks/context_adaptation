@@ -7,9 +7,13 @@ ROBOT:
 VLAD:
   n_clusters: 8
 BEHAVIOR:
-  buffer_size: 150
+  buffer_size: 500
+  # residual_max: 36.0
+  # uncertainty_threshold: .88
+  # residual_max: 27.0
+  # uncertainty_threshold: .96
   residual_max: 26.0
-  uncertainty_threshold: .9
+  uncertainty_threshold: .82
   buffer_update_freq: 2
   # speed_init: 3.0
   # max_cost: .32
