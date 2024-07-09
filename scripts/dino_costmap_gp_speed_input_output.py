@@ -54,12 +54,13 @@ CMAP = matplotlib.cm.get_cmap('magma')
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood):
+    def __init__(self, train_x, train_y, likelihood,lengthscale):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean()
         self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=train_x.shape[-1]))
         # self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-        self.covar_module.base_kernel.lengthscale = 3.
+        self.covar_module.base_kernel.lengthscale = lengthscale
+        # self.covar_module.base_kernel.lengthscale = 3.
         # self.covar_module.base_kernel.lengthscale = 10
 
 
@@ -129,6 +130,9 @@ class Context_Clusterer(object):
         self.residual_max = config['BEHAVIOR']['residual_max']
         self.uc_thresh = config['BEHAVIOR']['uncertainty_threshold']
 
+        self.cost_lengthscale = config['BEHAVIOR']['cost_lengthscale']
+        self.speed_lengthscale = config['BEHAVIOR']['speed_lengthscale']
+
         # self.loss = nn.MSELoss()
         # self.opt = torch.optim.SGD(self.cost_model.parameters(),lr = .00000001)
         buffer_len = config['BEHAVIOR']['buffer_size']
@@ -141,17 +145,40 @@ class Context_Clusterer(object):
         self.in_std = 0.0
         self.in_mean = 0.0
 
-        # buffer_checkpoint = torch.load('buffer_checkpoint.pt')
-        buffer_checkpoint = torch.load(os.path.join(assets_dir, 'gp_params', 'buffer_checkpoint.pt'))
+        # buffer_checkpoint = torch.load('buffer_checkpoint_turnpike.pt')
+        # buffer_checkpoint = torch.load(os.path.join(assets_dir, 'gp_params', 'buffer_checkpoint.pt'))
+        buffer_checkpoint = torch.load(os.path.join(assets_dir, 'gp_params', 'buffer_checkpoint_turnpike.pt'))
         # print("INIT SIZE", init_size)
-        self.train_in_buffer = buffer_checkpoint['train_buffer'].cuda()
-        self.train_label_buffer = buffer_checkpoint['train_labels'].cuda()
-        self.train_buffer_classes = buffer_checkpoint['train_classes']
-        self.buffer_idx = buffer_checkpoint['buffer_idx']
-        self.buffer_full = buffer_checkpoint['full']
+        # self.train_in_buffer = buffer_checkpoint['train_buffer'].cuda()
+        # self.train_label_buffer = buffer_checkpoint['train_labels'].cuda()
+        # self.train_buffer_classes = buffer_checkpoint['train_classes']
+        # self.buffer_idx = buffer_checkpoint['buffer_idx']
+        # self.buffer_full = buffer_checkpoint['full']
 
         self.cost_offset = .0
         self.velocity = 0.0
+
+
+        #probably would be smarter to use the actual update buffer method oops
+        avoid_class = 3 #looks like 3 or 5|6
+        num_insert = 3
+        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+        avoid_classes = np.zeros((num_insert)) + avoid_class
+        avoid_labels = torch.ones((num_insert,1)).cuda()
+        # avoid_data[:,avoid_class] *= 0
+        # avoid_data[:,6] *= .2
+        avoid_data[:,-1] = 1.0
+        for i in range(num_insert):
+            avoid_data[i,-2] = i*2
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
+           21.984331, 24.273615]).cuda() / self.residual_max
+
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+
+        self.num_insert = num_insert
+        self.buffer_idx += self.num_insert
 
         # for i in range(self.VLAD_CLUSTS):
         #     tinput = torch.ones(self.VLAD_CLUSTS).float().cuda()
@@ -168,7 +195,7 @@ class Context_Clusterer(object):
         self.gp_params = None
 
         # self.gp_params = torch.load('gp_params_speed_input')
-        self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_speed_input'))
+        # self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_speed_input'))
 
         self.speed_gp = None
         self.speed_likelihood = None
@@ -205,7 +232,7 @@ class Context_Clusterer(object):
         # self.actual_vel = vel
         self.odom_msg = msg
         self.pose_se3 = pose_msg_to_se3(msg)
-        self.vel_history = self.vel_history + (vel - self.vel_history) * .1
+        self.vel_history = self.vel_history + (self.velocity - self.vel_history) * .1
 
     def handle_cost(self, msg):
         self.cost = msg.data
@@ -324,6 +351,10 @@ class Context_Clusterer(object):
         classes = da[xloc,yloc]
         spot = stats.mode(classes)[0]
 
+        # print("CLASS - ", classes)
+
+        np.save('/home/physics_atv/physics_atv_ws/gridmap_data', gridmap['data'])
+
         input = torch.tensor(gridmap['data']/self.residual_max).cuda()
         # tinput = torch.tensor(gridmap['data']).cuda()
         # input = (tinput - tinput.mean())/tinput.std()
@@ -335,7 +366,7 @@ class Context_Clusterer(object):
             input_sample = input[:,xloc[0],yloc[0]]
             input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]).cuda(),torch.Tensor([self.cost]).cuda()))
             if torch.count_nonzero(input_sample[:-2]) == 0:
-                print("IN UNKOWN SPACE")
+                print("IN UNKNOWN SPACE")
             else:
                 if self.buffer_full:
                     print("))))))))))))))))))))))))))))))))))))))))))))))))))")
@@ -381,10 +412,11 @@ class Context_Clusterer(object):
             # print(train_in_buffer[:10], train_in_buffer.shape)
             self.in_mean = torch.mean(train_in_buffer, dim = 0)
             self.in_std = torch.std(train_in_buffer, dim = 0)
+            print(self.in_mean)
             train_in_buffer = (train_in_buffer - self.in_mean)/self.in_std
-            self.gp = ExactGPModel(train_in_buffer[:,:-1], train_label_buffer, self.likelihood).cuda()
+            self.gp = ExactGPModel(train_in_buffer[:,:-1], train_label_buffer, self.likelihood, self.cost_lengthscale).cuda()
             # print(train_in_buffer[:,-2])
-            self.speed_gp = ExactGPModel(train_in_buffer[:,self.speed_gp_indices], train_in_buffer[:,-2], self.likelihood).cuda()
+            self.speed_gp = ExactGPModel(train_in_buffer[:,self.speed_gp_indices], train_in_buffer[:,-2], self.likelihood, self.speed_lengthscale).cuda()
             if self.gp_params is not None:
                 self.gp.load_state_dict(self.gp_params)
             if self.speed_gp_params is not None:
@@ -424,13 +456,14 @@ class Context_Clusterer(object):
         #
         #         self.gp_params = self.gp.state_dict()
         # #
-        # if self.hz_counter % 20 == 0 and self.gp_params is not None:
-        #     print(self.gp_params)
-        #     print(self.gp.covar_module.base_kernel.lengthscale)
+        # if self.hz_counter % 20 == 0:# and self.gp_params is not None:
+        #     # print(self.gp_params)
+        #     # print(self.gp.covar_module.base_kernel.lengthscale)
         #     # torch.save(self.gp_params, 'gp_params_speed_input')
         #     savedict = {'train_buffer': self.train_in_buffer, 'train_labels': self.train_label_buffer, 'train_classes': self.train_buffer_classes,
         #                 'buffer_idx': self.buffer_idx, 'full' :self.buffer_full}
-        #     torch.save(savedict, 'buffer_checkpoint.pt')
+        #     torch.save(savedict, 'buffer_checkpoint_turnpike.pt')
+        #     print("SAVED _ _ _ _ _ _ _ __ _ _ _ _ _ _ _ _ __ _ _ __")
         # print("LOSS: ", loss.item())
         infer_now = time.perf_counter()
         with torch.no_grad():
@@ -456,9 +489,24 @@ class Context_Clusterer(object):
 
                 observed_pred = self.likelihood(self.speed_gp(input[:,self.speed_gp_indices]))
                 speedmap = observed_pred.mean
+                # speedmap = (speedmap * self.in_std[-2]) + self.in_mean[-2]
+
+                speedmap_var = observed_pred.variance#.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
+
+                print("CVAR - ", self.cvar_alpha)
+
+                phi = stats.norm.pdf(stats.norm.ppf(self.cvar_alpha))
+                cvar = speedmap + (speedmap_var * phi)/(1.0-self.cvar_alpha)
+                speedmap = cvar
                 speedmap = (speedmap * self.in_std[-2]) + self.in_mean[-2]
+
                 speedmap = speedmap.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
-                speedmap_var = observed_pred.variance.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
+
+                if (self.rough_history < self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
+                    self.cvar_alpha += 0.01
+                elif (self.rough_history > self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
+                    self.cvar_alpha -= 0.01
+                self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
 
             # costmap = costmap_var
             # print(costmap.min(), costmap.max(), '+++++')
@@ -468,17 +516,7 @@ class Context_Clusterer(object):
 
         # costmap = (unc_map + costmap)/2.0
 
-        if (self.rough_history < self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
-            self.cvar_alpha += 0.01
-        elif (self.rough_history > self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
-            self.cvar_alpha -= 0.01
-        self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
 
-        print("CVAR - ", self.cvar_alpha)
-
-        phi = stats.norm.pdf(stats.norm.ppf(self.cvar_alpha))
-        cvar = speedmap + (speedmap_var * phi)/(1.0-self.cvar_alpha)
-        speedmap = cvar
 
         # self.velocity = speedmap[xloc[0],yloc[0]] + np.random.normal(scale = 0.5)
         # self.velocity = np.minimum(self.velocity, self.actual_vel)
