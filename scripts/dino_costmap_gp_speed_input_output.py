@@ -162,6 +162,7 @@ class Context_Clusterer(object):
         #probably would be smarter to use the actual update buffer method oops
         avoid_class = 3 #looks like 3 or 5|6
         num_insert = 3
+        spread = 3
         avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
         avoid_classes = np.zeros((num_insert)) + avoid_class
         avoid_labels = torch.ones((num_insert,1)).cuda()
@@ -169,7 +170,7 @@ class Context_Clusterer(object):
         # avoid_data[:,6] *= .2
         avoid_data[:,-1] = 1.0
         for i in range(num_insert):
-            avoid_data[i,-2] = i*2
+            avoid_data[i,-2] = i*spread
             avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
            21.984331, 24.273615]).cuda() / self.residual_max
 
@@ -195,7 +196,7 @@ class Context_Clusterer(object):
         self.gp_params = None
 
         # self.gp_params = torch.load('gp_params_speed_input')
-        # self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_speed_input'))
+        self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_speed_input'))
 
         self.speed_gp = None
         self.speed_likelihood = None
@@ -204,9 +205,11 @@ class Context_Clusterer(object):
 
         # self.gp_params = torch.load('gp_params_speed_input')
 
-        self.max_roughness = .4
+        self.max_roughness = config['BEHAVIOR']['max_cost']
+        self.max_velocity = config['BEHAVIOR']['max_velocity']
+        self.velocity_margin = config['BEHAVIOR']['velocity_margin']
         self.cvar_alpha = .0
-        self.rough_history = 0.1
+        self.rough_history = 0.2
         self.vel_history = 0.0
         # self.gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'gp_params_ks_7.pt'))
         # print(self.gp_params)
@@ -412,9 +415,10 @@ class Context_Clusterer(object):
             # print(train_in_buffer[:10], train_in_buffer.shape)
             self.in_mean = torch.mean(train_in_buffer, dim = 0)
             self.in_std = torch.std(train_in_buffer, dim = 0)
-            print(self.in_mean)
+            # print(self.in_mean)
             train_in_buffer = (train_in_buffer - self.in_mean)/self.in_std
-            self.gp = ExactGPModel(train_in_buffer[:,:-1], train_label_buffer, self.likelihood, self.cost_lengthscale).cuda()
+            # self.gp = ExactGPModel(train_in_buffer[:,:-1], train_label_buffer, self.likelihood, self.cost_lengthscale).cuda()
+            self.gp = ExactGPModel(train_in_buffer[:,:-1], train_in_buffer[:,-1], self.likelihood, self.cost_lengthscale).cuda()
             # print(train_in_buffer[:,-2])
             self.speed_gp = ExactGPModel(train_in_buffer[:,self.speed_gp_indices], train_in_buffer[:,-2], self.likelihood, self.speed_lengthscale).cuda()
             if self.gp_params is not None:
@@ -445,9 +449,9 @@ class Context_Clusterer(object):
         #         self.likelihood.train()
         #         mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.gp)
         #         optimizer.zero_grad()
-        #         output = self.gp(train_in_buffer)
+        #         output = self.gp(train_in_buffer[:,:-1])
         #         # print(output)
-        #         loss = -mll(output, train_label_buffer)
+        #         loss = -mll(output, train_in_buffer[:,-1])
         #         print("LOSS - ", loss.item())
         #         # print("PARAMS ", self.gp.covar_module)
         #         if not torch.isnan(loss):
@@ -455,7 +459,7 @@ class Context_Clusterer(object):
         #             optimizer.step()
         #
         #         self.gp_params = self.gp.state_dict()
-        # #
+        #
         # if self.hz_counter % 20 == 0:# and self.gp_params is not None:
         #     # print(self.gp_params)
         #     # print(self.gp.covar_module.base_kernel.lengthscale)
@@ -483,9 +487,9 @@ class Context_Clusterer(object):
                 input = torch.hstack((input,vel_append.cuda(), rough_append.cuda()))
                 input = (input - self.in_mean)/self.in_std
                 observed_pred = self.likelihood(self.gp(input[:,:-1]))
-                costmap = observed_pred.mean.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
+                costmap = observed_pred.mean
                 costmap_var = observed_pred.variance.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
-                costmap += self.cost_offset
+                # costmap += self.cost_offset
 
                 observed_pred = self.likelihood(self.speed_gp(input[:,self.speed_gp_indices]))
                 speedmap = observed_pred.mean
@@ -500,11 +504,14 @@ class Context_Clusterer(object):
                 speedmap = cvar
                 speedmap = (speedmap * self.in_std[-2]) + self.in_mean[-2]
 
+                costmap = (costmap * self.in_std[-1]) + self.in_mean[-1]
+
+                costmap = costmap.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
                 speedmap = speedmap.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
 
-                if (self.rough_history < self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
+                if (self.rough_history < self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
                     self.cvar_alpha += 0.01
-                elif (self.rough_history > self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < .4:
+                elif (self.rough_history > self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
                     self.cvar_alpha -= 0.01
                 self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
 
@@ -521,6 +528,8 @@ class Context_Clusterer(object):
         # self.velocity = speedmap[xloc[0],yloc[0]] + np.random.normal(scale = 0.5)
         # self.velocity = np.minimum(self.velocity, self.actual_vel)
         # print('velocity - ', self.velocity)
+
+        print("COSTMAP - ", costmap.min(), costmap.max())
 
         costmap /= 2.0
         # costmap *= 0.0
@@ -540,11 +549,13 @@ class Context_Clusterer(object):
         var_viz[~np.isfinite(var_viz)] = 0.0
         # var_viz[xloc,yloc] = 1
 
+        speedmap = np.clip(speedmap,0,self.max_velocity)
+
         # costmap_msg = self.costmap_to_gridmap(costmap, info, variance = var_viz)
         costmap_msg = self.costmap_to_gridmap(costmap, info)
         self.costmap_pub.publish(costmap_msg)
 
-        speedmap_msg = self.costmap_to_gridmap(speedmap, info, costmap_layer = 'speedmap', norm_factor = 7.0)
+        speedmap_msg = self.costmap_to_gridmap(speedmap, info, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
         self.speedmap_pub.publish(speedmap_msg)
 
 
@@ -615,7 +626,8 @@ class Context_Clusterer(object):
 
         # vcostmap = np.clip(costmap,0,1)
         if norm_factor is None:
-            vcostmap = np.clip(costmap*2.,0,.6)/.6
+            # vcostmap = np.clip(costmap*2.,0,.6)/.6
+            vcostmap = np.clip(costmap*2.,0,1)
         else:
             vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
         # vcostmap = costmap

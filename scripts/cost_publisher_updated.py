@@ -400,7 +400,9 @@ class TraversabilityCostNode(object):
         ybp *= self.params['IMU_mult']['y']
         bp += ybp
 
-        MEAN = np.mean(np.abs(self.bufferRoll.data)) + np.mean(np.abs(self.bufferPitch.data))
+        MEAN = np.mean(np.abs(self.bufferRoll.data)) #+ np.mean(np.abs(self.bufferPitch.data))
+        # MEAN = np.mean(np.abs(np.diff(self.bufferRoll.data))) + np.mean(np.abs(np.diff(self.bufferPitch.data)))
+        # print("MEAN - ", MEAN,  MEAN*self.params['mean_mult'])
         bp += MEAN*self.params['mean_mult']
 
         sbp = self.shock_cost * self.params['shock_mult']
@@ -413,7 +415,13 @@ class TraversabilityCostNode(object):
         cost = bp
         # cost = baseline_cost
 
-        cost = .7*cost + self.vel_mismatch + self.diff_cost*.2
+        jerk = np.mean(np.abs(np.diff(self.bufferL.data[-30:])))
+        # print("JERK -- ", jerk)
+        cost += jerk
+
+        # cost = .7*cost + self.vel_mismatch + self.diff_cost*.2
+        cost = cost + 0*self.vel_mismatch + 0*self.diff_cost*.2
+        # cost += jerk*10
 
         # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
         # now = time.perf_counter()
