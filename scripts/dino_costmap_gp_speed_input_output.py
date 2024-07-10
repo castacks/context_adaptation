@@ -536,6 +536,7 @@ class Context_Clusterer(object):
         ids = np.where(unc_map != 0)
         costmap[ids] = unc_map[ids]
         # costmap = (costmap - .65)/.2
+        costmap[~np.isfinite(costmap)] = 0.0
 
         var_min = costmap_var.min()
         var_max = costmap_var.max()
