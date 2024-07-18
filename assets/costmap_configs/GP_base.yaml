@@ -7,20 +7,22 @@ ROBOT:
 VLAD:
   n_clusters: 8
 BEHAVIOR:
-  buffer_size: 200
+  buffer_size: 500 #try increasing
   # residual_max: 36.0
   # uncertainty_threshold: .88
   # residual_max: 27.0
   # uncertainty_threshold: .96
   residual_max: 26.0
-  uncertainty_threshold: .82
+  uncertainty_threshold: .85
   buffer_update_freq: 2
   cost_lengthscale: 3.0
   speed_lengthscale: 1.5
   # speed_init: 3.0
   max_cost: .4
   max_velocity: 7
-  velocity_margin: .3 #high on bag playback since we don't control speed
+  velocity_margin: .6 #high on bag playback since we don't control speed
+  train_kernel: False
+  costmap_cvar: .03
   # adaptation_factor: .001
   # speed_cap: 5.5
   # weighted_avg_speed: False
