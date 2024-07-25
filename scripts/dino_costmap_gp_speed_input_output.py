@@ -148,7 +148,7 @@ class Context_Clusterer(object):
         # buffer_checkpoint = torch.load(os.path.join(assets_dir, 'gp_params', 'buffer_checkpoint.pt'))
         # buffer_checkpoint = torch.load(os.path.join(assets_dir, 'gp_params', 'buffer_checkpoint_turnpike.pt'))
         # buffer_checkpoint = torch.load('buffer_checkpoint_debug.pt')
-        buffer_checkpoint = torch.load('buffer_checkpoint_fig8.pt')
+        # buffer_checkpoint = torch.load('buffer_checkpoint_fig8.pt')
         # print("INIT SIZE", init_size)
         # self.train_in_buffer = buffer_checkpoint['train_buffer'].cuda()
         # self.train_label_buffer = buffer_checkpoint['train_labels'].cuda()
