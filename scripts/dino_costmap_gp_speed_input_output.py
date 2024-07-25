@@ -198,7 +198,9 @@ class Context_Clusterer(object):
         self.speed_likelihood = None
         self.speed_gp_params = None
         self.speed_likelihood = None
-        self.speed_gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'speed_gp_params'))
+        # self.speed_gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'speed_gp_params'))
+        self.speed_gp_params = torch.load(os.path.join(assets_dir, 'gp_params', 'speed_gp_params_new'))
+
         # print(self.speed_gp_params)
         self.speed_gp_indices = [0,1,2,3,4,5,6,7,9]
 
@@ -209,8 +211,12 @@ class Context_Clusterer(object):
         self.rough_history = 0.2
         self.vel_history = 0.0
         self.costmap_cvar = config['BEHAVIOR']['costmap_cvar']
+        self.unknown_cost = config['BEHAVIOR']['unknown_cost']
+        self.unknown_speed = config['BEHAVIOR']['unknown_speed']
+        self.maxpool_speedmap = config['BEHAVIOR']['maxpool_speedmap']
 
         self.support_data = []
+        self.errors = []
 
         rospy.Subscriber(gridmap_topic, GridMap, self.handle_map, queue_size=5)
 
@@ -238,7 +244,7 @@ class Context_Clusterer(object):
     def handle_cost(self, msg):
         self.cost = msg.data
         self.cost -= self.cost_offset
-        self.rough_history = self.rough_history + (msg.data - self.rough_history) * .1
+        self.rough_history = self.rough_history + (msg.data - self.rough_history) * .2
         # print('cost', self.cost)
 
     def handle_max_roughness(self, msg):
@@ -346,9 +352,9 @@ class Context_Clusterer(object):
 
         unc_map[unc_map < self.uc_thresh] = 0
 
-        # e_kernel = np.ones((2, 2), np.float32)
-        # unc_map = cv2.erode(unc_map, e_kernel, iterations=1)
-        # unc_map = cv2.dilate(unc_map, e_kernel, iterations=1)
+        e_kernel = np.ones((2, 2), np.float32)
+        unc_map = cv2.erode(unc_map, e_kernel, iterations=1)
+        unc_map = cv2.dilate(unc_map, e_kernel, iterations=1)
         #
         # unc_map[unc_map < .78] = 0
 
@@ -360,27 +366,49 @@ class Context_Clusterer(object):
         ty = np.floor((tp[:,1]-P[1])/res)
         xloc,yloc = ty.astype(int), tx.astype(int)
 
+        if np.any(xloc > self.gridmap_size) or np.any(yloc > self.gridmap_size): #Super Odometry probably borked
+            print("WARNING: OUT OF BOUNDS! Not computing costmap")
+            return
+
         classes = da[xloc,yloc]
         spot = stats.mode(classes)[0]
 
         # np.save('/home/physics_atv/physics_atv_ws/gridmap_data', gridmap['data'])
 
-        input = torch.from_numpy(gridmap['data']/self.residual_max).cuda()
+        input = torch.from_numpy(gridmap['data']/self.residual_max)
         # print(input[:,xloc,yloc])
         # print("VEL MAX ", self.train_in_buffer[:,-2].max())
+        zero_mask = (input == 0).all(dim=0).cpu().numpy()
+        known_mask = ~zero_mask
 
         t1 = time.perf_counter()
         # print("T1 ", t1  - now)
+        # if True:
+        #     if self.gp is not None:
+        #         with torch.no_grad():
+        #             self.gp.eval()
+        #             self.likelihood.eval()
+        #             test_sample = input[:,xloc,yloc].mean(dim=1).clone()
+        #             test_sample = torch.cat((test_sample, torch.Tensor([self.velocity]))).cuda()
+        #             test_label = self.rough_history
+        #             test_sample = test_sample.unsqueeze(0)
+        #             test_sample = (test_sample - self.in_mean[:-1])/self.in_std[:-1]
+        #             rough_pred = self.likelihood(self.gp(test_sample[:])).mean[0]
+        #             rough_pred = (rough_pred * self.in_std[-1]) + self.in_mean[-1]
+        #             error = np.abs((rough_pred - test_label).cpu().numpy())
+        #             print("PRED VS SAMPLE", error, len(self.errors))
+        #             self.errors.append(error)
 
         if (self.velocity > .3) and self.hz_counter % self.buffer_update_freq == 0:
             # print("UPDATING+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-            input_sample = input[:,xloc[0],yloc[0]]
-
+            # input_sample = input[:,xloc[0],yloc[0]]
+            input_sample = input[:,xloc,yloc].mean(dim=1)
+            # print(n_input_sample.shape)
             # support_add = input[:,np.random.choice(np.arange(75,175)),np.random.choice(np.arange(75,175))].cpu().numpy()
             # if np.sum(np.abs(support_add)) > .1:
             #     self.support_data.append(support_add)
-            input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]).cuda(),torch.Tensor([self.cost]).cuda()))
-            # input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]),torch.Tensor([self.cost]))).cuda()
+            # input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]).cuda(),torch.Tensor([self.cost]).cuda()))
+            input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]),torch.Tensor([self.cost]))).cuda()
             # self.support_data.append(input_sample.cpu().numpy())
 
             if torch.count_nonzero(input_sample[:-2]) == 0:
@@ -397,13 +425,17 @@ class Context_Clusterer(object):
                     sel_max = edges[most_vel+1]
                     train_vels = self.train_in_buffer[:,-2].cpu().numpy()
                     insert_idx = np.random.choice(np.where((self.train_buffer_classes == most_class) & (train_vels > sel_min) & (train_vels < sel_max))[0])
-                    self.insert_train_buffer(input_sample, self.cost, spot, insert_idx)
+                    if insert_idx > self.num_insert: #don't remove human labels
+                        self.insert_train_buffer(input_sample, self.cost, spot, insert_idx)
                     # self.insert_train_buffer_FIFO(input_sample, self.cost, spot)
                 else:
                     self.update_train_buffer(input_sample, self.cost, spot)
 
-        costmap = np.zeros((self.gridmap_size,self.gridmap_size))
-        speedmap = np.zeros((self.gridmap_size,self.gridmap_size)) + 4.5
+        # costmap = np.zeros((self.gridmap_size,self.gridmap_size))
+        # speedmap = np.zeros((self.gridmap_size,self.gridmap_size)) + 4.5
+
+        costmap = np.zeros(self.gridmap_size*self.gridmap_size)
+        speedmap = np.zeros(self.gridmap_size*self.gridmap_size) + 4.5
 
         t2 = time.perf_counter()
         # print("T2 ", t2  - t1)
@@ -471,7 +503,7 @@ class Context_Clusterer(object):
             optimizer = torch.optim.SGD(self.speed_gp.parameters(), lr=0.01)
             with gpytorch.settings.debug(False):
                 self.speed_gp.train()
-                self.likelihood.train()
+                # self.likelihood.train()
                 self.speed_likelihood.train()
                 mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.speed_likelihood, self.speed_gp)
                 optimizer.zero_grad()
@@ -490,13 +522,14 @@ class Context_Clusterer(object):
             # print(self.gp_params)
             # print(self.gp.covar_module.base_kernel.lengthscale)
             # print(self.speed_gp_params)
-            # torch.save(self.speed_gp_params, 'speed_gp_params')
+            torch.save(self.speed_gp_params, 'speed_gp_params_new')
             # savedict = {'train_buffer': self.train_in_buffer, 'train_labels': self.train_label_buffer, 'train_classes': self.train_buffer_classes,
             #             'buffer_idx': self.buffer_idx, 'full' :self.buffer_full, 'toi':self.toi}
             # torch.save(savedict, 'buffer_checkpoint_FIFO.pt')
             # print("shape ", .shape)
             # np.save("support_data", np.array(self.support_data))
             print("SAVED _ _ _ _ _ _ _ __ _ _ _ _ _ _ _ _ __ _ _ __", self.hz_counter)
+            # np.save("ERROR_LIST", np.array(self.errors))
         # print("LOSS: ", loss.item())
 
         t3 = time.perf_counter()
@@ -515,11 +548,16 @@ class Context_Clusterer(object):
                 self.likelihood.eval()
                 self.speed_likelihood.eval()
                 input = input.permute(1,2,0).view(-1,self.VLAD_CLUSTS)
+
+                zero_mask_f = zero_mask.flatten()
+                keep_mask = ~zero_mask_f
+                input = input[keep_mask]
+
                 vel_append = torch.ones(input.shape[0],1) * self.velocity
                 # vel_append = torch.ones(input.shape[0],1) * self.fake_velocity
                 rough_append = torch.ones(input.shape[0],1) * self.max_roughness
-                input = torch.hstack((input,vel_append.cuda(), rough_append.cuda()))
-                # input = torch.hstack((input,vel_append, rough_append)).cuda()
+                # input = torch.hstack((input,vel_append.cuda(), rough_append.cuda()))
+                input = torch.hstack((input,vel_append, rough_append)).cuda()
                 input = (input - self.in_mean)/self.in_std
 
                 t41 = time.perf_counter()
@@ -527,16 +565,16 @@ class Context_Clusterer(object):
 
 
                 observed_pred = self.likelihood(self.gp(input[:,:-1]))
-                costmap = observed_pred.mean
-                costmap_var = observed_pred.variance
+                cost_pred = observed_pred.mean
+                cost_var = observed_pred.variance
                 # costmap_var = observed_pred.variance.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
                 # costmap += self.cost_offset
 
                 observed_pred = self.speed_likelihood(self.speed_gp(input[:,self.speed_gp_indices]))
-                speedmap = observed_pred.mean
+                speed_pred = observed_pred.mean
                 # speedmap = (speedmap * self.in_std[-2]) + self.in_mean[-2]
 
-                speedmap_var = observed_pred.variance#.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
+                speed_var = observed_pred.variance#.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
 
                 t42 = time.perf_counter()
                 print("T42 ", t42  - t41)
@@ -544,40 +582,53 @@ class Context_Clusterer(object):
                 print("CVAR - ", self.cvar_alpha)
 
                 phi = stats.norm.pdf(stats.norm.ppf(self.cvar_alpha))
-                cvar = speedmap + (speedmap_var * phi)/(1.0-self.cvar_alpha)
-                speedmap = cvar
+                cvar = speed_pred + (speed_var * phi)/(1.0-self.cvar_alpha)
+                speed_pred = cvar
                 # speedmap = speedmap + self.cvar_alpha * speedmap_var * 10
-                speedmap = (speedmap * self.in_std[-2]) + self.in_mean[-2]
+                speed_pred = (speed_pred * self.in_std[-2]) + self.in_mean[-2]
 
 
                 cmap_cvar = self.costmap_cvar
                 phi = stats.norm.pdf(stats.norm.ppf(cmap_cvar))
-                cvar = costmap + (costmap_var * phi)/(1.0-cmap_cvar)
-                costmap = cvar
+                cvar = cost_pred + (cost_var * phi)/(1.0-cmap_cvar)
+                cost_pred = cvar
 
-                costmap = (costmap * self.in_std[-1]) + self.in_mean[-1]
+                cost_pred = (cost_pred * self.in_std[-1]) + self.in_mean[-1]
 
                 t43 = time.perf_counter()
                 print("T43 ", t43  - t42)
 
-                costmap = costmap.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
-                speedmap = speedmap.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
+                costmap[keep_mask] = cost_pred.cpu().numpy()
+                speedmap[keep_mask] = speed_pred.cpu().numpy()
+
+                costmap = costmap.reshape(self.gridmap_size,self.gridmap_size)
+                speedmap = speedmap.reshape(self.gridmap_size,self.gridmap_size)
+
+                if self.maxpool_speedmap:
+                    speedmap = torch.from_numpy(speedmap).cuda()
+                    ksize = 3
+                    padding = (ksize - 1)//2
+                    m = torch.nn.MaxPool2d(ksize,stride=1, padding = padding)
+                    speedmap = m(speedmap.unsqueeze(0))[0].cpu().numpy()
 
                 if (self.rough_history < self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
-                    self.cvar_alpha += 0.01
-                elif (self.rough_history > self.max_roughness) and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
-                    self.cvar_alpha -= 0.01
+                    self.cvar_alpha += 0.005
+                elif (self.rough_history > self.max_roughness):# and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
+                    self.cvar_alpha -= 0.02
                 self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
 
+                #if we're not tracking well at low speeds then increase cvar
+                if (np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) > .4) and speedmap[xloc[0],yloc[0]] < 2.8:
+                    self.cvar_alpha += .01
 
-                speedmap_var = speedmap_var.cpu().numpy().reshape(self.gridmap_size,self.gridmap_size)
                 t44 = time.perf_counter()
                 print("T44 ", t44  - t43)
 
 
             if self.buffer_idx < 30 + self.num_insert: #let's give the speedmap a bit more time
                 speedmap = np.zeros((self.gridmap_size,self.gridmap_size)) + 4.5
-                speedmap_var = np.zeros_like(speedmap)
+                self.cvar_alpha = 0.0
+                # speedmap_var = np.zeros_like(speedmap)
             # costmap = costmap_var
             # print(costmap.min(), costmap.max(), '+++++')
             # costmap *= .5
@@ -602,6 +653,8 @@ class Context_Clusterer(object):
         costmap[ids] = unc_map[ids]
         # costmap = (costmap - .65)/.2
         costmap[~np.isfinite(costmap)] = 0.0
+        costmap[zero_mask] = self.unknown_cost
+        speedmap[zero_mask] = self.unknown_speed
 
         # var_min = costmap_var.min()
         # var_max = costmap_var.max()
@@ -609,7 +662,7 @@ class Context_Clusterer(object):
         # var_max = .3
         # print('###', var_min, var_max)
         print("Speedmap Min/Max ", speedmap.min(), speedmap.max(), speedmap[xloc[0],yloc[0]])
-        print("Speedmap VAR Min/Max ", speedmap_var.min(), speedmap_var.max())
+        # print("Speedmap VAR Min/Max ", speedmap_var.min(), speedmap_var.max())
 
         # var_viz = (costmap_var - var_min)/(var_max-var_min)
         # var_viz = np.clip(var_viz,0,1)
