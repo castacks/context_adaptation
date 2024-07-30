@@ -51,6 +51,8 @@ gpytorch.settings.debug(False)
 import matplotlib
 # CMAP = matplotlib.cm.get_cmap('plasma')
 CMAP = matplotlib.cm.get_cmap('magma')
+SMAP = matplotlib.cm.get_cmap('jet')
+
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
@@ -769,7 +771,10 @@ class Context_Clusterer(object):
             vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
         # vcostmap = costmap
 
-        gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
+        if costmap_layer == 'costmap':
+            gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
+        else:
+            gridmap_cs = (SMAP(vcostmap) * 255).astype(np.int32)
         gridmap_color = gridmap_cs[..., 0] * (2**16) + gridmap_cs[..., 1] * (2**8) + gridmap_cs[..., 2]
         gridmap_color = gridmap_color.view(dtype=np.float32)
 
