@@ -167,6 +167,7 @@ ${catkin_INCLUDE_DIRS}
 catkin_install_python(PROGRAMS
    scripts/cost_publisher.py
    scripts/cost_publisher_updated.py
+   scripts/cost_publisher_updated_wheelchair.py
    scripts/terrain_mismatch.py
 
    scripts/dino_context_clustering.py
@@ -179,6 +180,11 @@ catkin_install_python(PROGRAMS
    #scripts/dino_costmap_gp_speed_input_deepgp.py
    #scripts/dino_costmap_gp_latent_input.py
    scripts/dino_costmap_gp_speed_input_output.py
+   scripts/dino_costmap_gp_speed_input_output_anymal.py
+   scripts/dino_costmap_gp_speed_input_output_wheelchair.py
+   scripts/dino_costmap_gp_speed_input_output_latent.py
+   scripts/dino_costmap_gp_speed_input_output_nn.py
+   scripts/dino_costmap_gp_speed_input_output_categorical.py
 
 
    #src/context_adaptation_common/anyloc_utils.py
