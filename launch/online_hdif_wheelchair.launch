@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+
+<launch>
+    <!-- File management -->
+    <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
+    <!-- <arg name="config_fp" default="CC_big_model_new_config.yaml"/> -->
+    <arg name="config_fp" default="GP_wheelchair.yaml"/>
+
+	<!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_input.py" name="context_clustering" output="screen"> -->
+
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_output.py" name="context_clustering" output="screen"> -->
+  <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output_wheelchair.py" name="context_clustering" output="screen">
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output_nn.py" name="context_clustering" output="screen"> -->
+
+  <!-- <node pkg="context_adaptation" type="dino_costmap_gp_latent_input.py" name="context_clustering" output="screen"> -->
+
+
+
+  <!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
+
+        <param name="config_file" value="$(find context_adaptation)/assets/costmap_configs/$(arg config_fp)"/>
+
+				<param name="cost_topic" value="/traversability_cost"/>
+				<param name="odom_topic" value="/zedx/zed_node/odom"/>
+				<param name="gridmap_topic" value="/dino_gridmap"/>
+				<param name="costmap_topic" value="/shortrange_costmap"/>
+				<param name="vel_pub_topic" value="/controller/target_input"/>
+
+				<param name="viz" value='False'/>
+				<param name="pub_anchors" value='False'/>
+				<param name="pub_stats" value='True'/>
+	</node>
+
+  <node pkg="context_adaptation" type="cost_publisher_updated_wheelchair.py" name="roughness_cost">
+        <param name="cost_stats_dir" value="wanda_cost_statistics.yaml"/>
+        <param name="imu_topic" value="/zedx/zed_node/imu/data"/>
+  </node>
+
+
+
+</launch>
