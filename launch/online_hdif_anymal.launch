@@ -4,13 +4,13 @@
     <!-- File management -->
     <!-- <arg name="config_fp" default="configs/test_throttle_config.yaml"/> -->
     <!-- <arg name="config_fp" default="CC_big_model_new_config.yaml"/> -->
-    <arg name="config_fp" default="GP_base.yaml"/>
+    <arg name="config_fp" default="GP_anymal.yaml"/>
 
 	<!-- <node pkg="context_adaptation" type="dino_costmap.py" name="context_clustering" output="screen"> -->
   <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_input.py" name="context_clustering" output="screen"> -->
 
   <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_output.py" name="context_clustering" output="screen"> -->
-  <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output.py" name="context_clustering" output="screen">
+  <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output_anymal.py" name="context_clustering" output="screen">
   <!-- <node pkg="context_adaptation" type="dino_costmap_gp_speed_input_output_nn.py" name="context_clustering" output="screen"> -->
 
   <!-- <node pkg="context_adaptation" type="dino_costmap_gp_latent_input.py" name="context_clustering" output="screen"> -->
@@ -21,8 +21,8 @@
 
         <param name="config_file" value="$(find context_adaptation)/assets/costmap_configs/$(arg config_fp)"/>
 
-				<param name="cost_topic" value="/traversability_cost"/>
-				<param name="odom_topic" value="/integrated_to_init"/>
+				<param name="cost_topic" value="/wild_visual_navigation_node/instant_traversability"/>
+				<param name="odom_topic" value="/state_estimator/pose_in_odom"/>
 				<param name="gridmap_topic" value="/dino_gridmap"/>
 				<param name="costmap_topic" value="/shortrange_costmap"/>
 				<param name="vel_pub_topic" value="/controller/target_input"/>
@@ -32,15 +32,6 @@
 				<param name="pub_stats" value='True'/>
 	</node>
 
-  <node pkg="context_adaptation" type="cost_publisher_updated.py" name="roughness_cost">
-        <param name="cost_stats_dir" value="wanda_cost_statistics.yaml"/>
-        <param name="imu_topic" value="/novatel/imu/data"/>
-	</node>
 
-  <node pkg="context_adaptation" type="terrain_mismatch.py" name="terrain_mismatch" output="screen">
-	</node>
-	<!-- # cost_topic = '/traversability_cost'
-	# odom_topic = '/lester/odom'
-	# im_topic = '/lester/stereo_left/image_rect_color/compressed' -->
 
 </launch>

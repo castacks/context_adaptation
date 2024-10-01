@@ -161,11 +161,11 @@ def cost_function(data, sensor_freq, cost_name, cost_stats, freq_range=None, num
     return cost
 
 class TraversabilityCostNode(object):
-    def __init__(self, cost_stats_dir):
+    def __init__(self, cost_stats_dir, imu_topic):
 
         # Set up subscribers
         # rospy.Subscriber('/lester/imu/data', Imu, self.handle_imu, queue_size=1)
-        rospy.Subscriber('/novatel/imu/data', Imu, self.handle_imu, queue_size=1)
+        rospy.Subscriber(imu_topic, Imu, self.handle_imu, queue_size=1)
         rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
         rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
@@ -420,7 +420,7 @@ class TraversabilityCostNode(object):
         cost += jerk
 
         # cost = .7*cost + self.vel_mismatch + self.diff_cost*.2
-        cost = cost + 0*self.vel_mismatch + 0*self.diff_cost*.2
+        # cost = cost + 0*self.vel_mismatch + 0*self.diff_cost*.2
         # cost += jerk*10
 
         # cost = (costZ*.8 + costRoll*0 + costPitch*0 + costX*.0 + costY*.0 + self.joy_cost*0 + self.shock_cost*0)*1.8
@@ -515,11 +515,12 @@ if __name__ == "__main__":
     rospy.init_node("traversability_cost_publisher", log_level=rospy.INFO)
     rospy.loginfo("Initialized traversability_cost_publisher node")
     cost_stats_dir = rospy.get_param("~cost_stats_dir")
+    imu_topic = rospy.get_param("~imu_topic")
     rp = rospkg.RosPack()
     cost_stats_dir = os.path.join(rp.get_path("context_adaptation"), "assets","cost_configs") + '/' + cost_stats_dir
     # cost_stats_dir = './wanda_cost_statistics.yaml'
     # cost_stats_dir = './wanda_cost_statistics.yaml'
-    node = TraversabilityCostNode(cost_stats_dir)
+    node = TraversabilityCostNode(cost_stats_dir, imu_topic)
     rate = rospy.Rate(100)
 
     while not rospy.is_shutdown():
