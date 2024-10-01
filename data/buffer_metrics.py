@@ -7,6 +7,9 @@ import scipy.stats as stats
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import pairwise_distances
+
+np.random.seed(0)
+
 def mean_sum_l2_distance(data):
     """
     Calculate the sum of the L2 distances between each sample and all other samples, then take the mean.
@@ -17,6 +20,7 @@ def mean_sum_l2_distance(data):
     # Compute the pairwise L2 distances
     # print(data[:10])
     print(data.min(), data.max())
+    # print(data[:5])
     distances = pairwise_distances(data, metric='euclidean')
     # print(distances[:10])
     # print(distances.shape)
@@ -25,8 +29,12 @@ def mean_sum_l2_distance(data):
     sum_distances = np.sum(distances, axis=1)/data.shape[0]
     # print(sum_distances.shape)
 
+    # print(sum_distances.shape)
+
     # Compute the mean of the sum of distances
     mean_distance = np.mean(sum_distances)
+
+    print(mean_distance)
 
     return mean_distance
 
@@ -50,7 +58,7 @@ def pca_variance(data, variance_threshold = .9):
 
     # Calculate the cumulative sum of the explained variance ratio
     cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-    print(cumulative_variance)
+    # print(cumulative_variance)
 
     # Determine the number of components required to explain the desired variance
     num_components = np.argmax(cumulative_variance >= variance_threshold) + 1
@@ -177,6 +185,9 @@ for i in tqdm(range(buff_size,support_data.shape[0])):
 
 mean = np.mean(all_data,axis = 0).reshape(1,-1)
 std = np.std(all_data,axis = 0).reshape(1,-1)
+
+print(buff_intelligent.min(), buff_intelligent.max())
+
 buff_intelligent = (buff_intelligent.copy() - mean)/std
 buff_FIFO = (buff_FIFO.copy() - mean)/std
 
@@ -201,6 +212,8 @@ num_FIFO = pca_variance(buff_FIFO)
 
 sum_dists_intelligent = mean_sum_l2_distance(buff_intelligent)
 sum_dists_FIFO = mean_sum_l2_distance(buff_FIFO)
+
+print(buff_FIFO.shape, buff_intelligent.shape)
 
 print(num_intelligent, num_FIFO)
 print(sum_dists_intelligent, sum_dists_FIFO)

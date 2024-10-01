@@ -12,8 +12,11 @@ BEHAVIOR:
   # uncertainty_threshold: .88
   # residual_max: 27.0
   # uncertainty_threshold: .96
-  residual_max: 26.0
-  uncertainty_threshold: .82
+  # residual_max: 26.0
+  # uncertainty_threshold: .82
+  #wheelchair
+  residual_max: 22.5
+  uncertainty_threshold: .9
   buffer_update_freq: 2
   cost_lengthscale: 7.0
   speed_lengthscale: 1.5

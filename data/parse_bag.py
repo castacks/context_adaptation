@@ -4,7 +4,7 @@ import numpy as np
 from natsort import natsorted
 from tqdm import tqdm
 
-bag_dir= '/media/matthew/Extreme SSD/20240726/2024-07-26-14-06-36_gupta_first_exp'
+bag_dir= '/media/matthew/Extreme Pro/20240815/2024-08-15-15-21-51_semantic_lcb2'
 # bag_dir= '/media/matthew/Extreme Pro/2024726/gupta_irl_take25lcb_data'
 # bag_dir= '/media/matthew/Extreme Pro/2024726/try2'
 

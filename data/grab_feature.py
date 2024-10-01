@@ -16,7 +16,7 @@ def on_click(event, img_array):
 def display_image_and_select_point(image_path):
     # Open the image
 
-    img_array = np.load('/home/matthew/physics_atv_ws/gridmap_data_anymal_tree_left.npy')
+    img_array = np.load('/home/matthew/physics_atv_ws/gridmap_data.npy')
 
     # print(img_array.shape)
     img_array = np.swapaxes(img_array, 0,2)

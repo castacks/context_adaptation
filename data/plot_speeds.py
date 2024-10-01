@@ -54,16 +54,21 @@ fig8_r, fig8_c = _to_map(fig8_points)
 
 
 
-bag_dir= '/media/matthew/Extreme SSD/20240726/2024-07-26-14-06-36_gupta_first_exp'
+# bag_dir= '/media/matthew/Extreme SSD/20240726/2024-07-26-14-06-36_gupta_first_exp'
 # # #32/40
 # # # laps = np.array([[40,152], [152.5,297], [299,448]])
 # laps = np.array([[32,152], [152.5,297], [299,448]])
-laps = np.array([[32,152], [153.5,296], [301,447]])
+# laps = np.array([[32,152], [153.5,296], [301,447]])
 
 
 # bag_dir= '/media/matthew/Extreme Pro/2024726/gupta_irl_take25lcb_data'
 # laps = np.array([[13,158.0], [162,293], [296,435]])
 
+# bag_dir = '/media/matthew/Extreme Pro/20240823/online_hdif/2024-08-23-c4'
+# laps = np.array([[12., 172],[180,295], [308,417],[422,534], [592,713]])
+
+bag_dir= '/media/matthew/Extreme SSD/20240823/2024-08-23-c2'
+laps = np.array([[21., 210],[212,360], [365,520],[524,665], [771,909]])
 
 exp_name = bag_dir.split('/')[-1]
 
@@ -82,7 +87,7 @@ print(gps.shape)
 
 laps += vels[0,0]
 
-fig, ax = plt.subplots(1,3)
+fig, ax = plt.subplots(1,5)
 ax.flatten()
 vel_thresh = 1.0
 r_super_thresh = .25
@@ -117,8 +122,8 @@ for i,lap in enumerate(laps):
 
     ax[i].imshow(np.transpose(map,(1,2,0)))
     ax[i].scatter(fig8_c,fig8_r,s=40,c='w')
-    # im = ax[i].scatter(col,row,c=gps_vels,cmap='jet',vmin=0.0,vmax=6.0,s=1.6)
-    im = ax[i].scatter(col,row,c=gps_rough,cmap='plasma',vmin=0.0,vmax=1.0,s=1.6)
+    im = ax[i].scatter(col,row,c=gps_vels,cmap='jet',vmin=0.0,vmax=6.0,s=1.6)
+    # im = ax[i].scatter(col,row,c=gps_rough,cmap='plasma',vmin=0.0,vmax=1.0,s=1.6)
     # im = ax[i].scatter(col,row,c=gps_score,cmap='RdYlGn',vmin=0.0,vmax=1.0,s=1.6)
 
 

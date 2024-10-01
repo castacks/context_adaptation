@@ -165,31 +165,32 @@ class Context_Clusterer(object):
 
 
         # #probably would be smarter to use the actual update buffer method oops
-        # avoid_class = 3 #looks like 3 or 5|6
-        # # num_insert = 10
-        # # spread = .9
-        # num_insert = 8
-        # spread = 1.2
-        # avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        # avoid_classes = np.zeros((num_insert)) + avoid_class
-        # avoid_labels = torch.ones((num_insert,1)).cuda()
-        # # avoid_data[:,avoid_class] *= 0
-        # # avoid_data[:,6] *= .2
-        # avoid_data[:,-1] = 1.0
-        # for i in range(num_insert):
-        #     avoid_data[i,-2] = i*spread
-        #     avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
-        #    21.984331, 24.273615]).cuda() / self.residual_max
-        #     # avoid_data[i,-1] += torch.randint(-1000,1001,[1])[0] * .0001
-        #     # avoid_data[i,:self.VLAD_CLUSTS] += torch.randint(-1000,1001,[self.VLAD_CLUSTS]).cuda() * .0001
-        #
-        # self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        # self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
-        # self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-        #
-        # self.num_insert = num_insert
-        # self.buffer_idx += self.num_insert
-        self.num_insert = 0
+        avoid_class = 0 #looks like 3 or 5|6
+        # num_insert = 10
+        # spread = .9
+        num_insert = 4
+        spread = 1.2
+        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+        avoid_classes = np.zeros((num_insert)) + avoid_class
+        avoid_labels = torch.ones((num_insert,1)).cuda()
+        # avoid_data[:,avoid_class] *= 0
+        # avoid_data[:,6] *= .2
+        avoid_data[:,-1] = 1.5
+        for i in range(num_insert):
+            avoid_data[i,-2] = np.random.normal()*.0001
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.873137, 21.889065, 25.708973, 21.219118,
+             25.76748,  24.824245, 24.676182, 26.892282]).cuda() / self.residual_max
+            # avoid_data[i,-1] += torch.randint(-1000,1001,[1])[0] * .0001
+            # avoid_data[i,:self.VLAD_CLUSTS] += torch.randint(-1000,1001,[self.VLAD_CLUSTS]).cuda() * .0001
+
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+
+        self.num_insert = num_insert
+        self.buffer_idx += self.num_insert
+
+        # self.num_insert = 0
 
         self.gp = None
         self.likelihood = None
@@ -391,7 +392,7 @@ class Context_Clusterer(object):
         classes = da[xloc,yloc]
         spot = stats.mode(classes)[0]
 
-        # np.save('/home/physics_atv/physics_atv_ws/gridmap_data', gridmap['data'])
+        # np.save('/home/physics_atv/physics_atv_ws/gridmap_data_wheelchair', gridmap['data'])
 
         input = torch.from_numpy(gridmap['data']/self.residual_max)
         # print(input[:,xloc,yloc])
@@ -785,7 +786,7 @@ class Context_Clusterer(object):
 
         # vcostmap = np.clip(costmap,0,1)
         if norm_factor is None:
-            # vcostmap = np.clip(costmap*2.,0,.6)/.6
+            # vcostmap = np.clip(costmap*2.,0,.8)/.8
             vcostmap = np.clip(costmap*2.,0,1)
         else:
             vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
