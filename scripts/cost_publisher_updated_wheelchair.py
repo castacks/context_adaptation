@@ -7,7 +7,6 @@ from geometry_msgs.msg import Twist
 #from learned_cost_map.msg import FloatStamped
 from nav_msgs.msg import Odometry
 from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
-from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
 
 import numpy as np
 

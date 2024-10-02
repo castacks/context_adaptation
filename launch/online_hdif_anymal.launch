@@ -32,6 +32,7 @@
 				<param name="pub_stats" value='True'/>
 	</node>
 
+  <include file="$(find physics_atv_visual_mapping)/launch/dino_localmapping_anymal.launch" />
 
 
 </launch>

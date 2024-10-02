@@ -5,7 +5,6 @@ from sensor_msgs.msg import Imu, Joy
 #from learned_cost_map.msg import FloatStamped
 from nav_msgs.msg import Odometry
 from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
-from torch_mpc.msg import KBMParameters, MPPIStats, SteerSetpointKBMState
 
 import numpy as np
 
@@ -168,7 +167,6 @@ class TraversabilityCostNode(object):
         rospy.Subscriber(imu_topic, Imu, self.handle_imu, queue_size=1)
         rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
         # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
-        rospy.Subscriber('/mppi/stats', MPPIStats, self.handle_stats, queue_size=1)
         rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
         rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
         # rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
