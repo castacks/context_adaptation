@@ -20,8 +20,6 @@ data_files = [
         glob("assets/dino_clusters/VITB_not_turnpike_8/*.pt")
     ),    
     (os.path.join("share", package_name, "assets", "gp_params"), glob("assets/gp_params/*")),
-    # # code
-    # (os.path.join("share", package_name, "common"), glob("context_adaptation/common/*.py")),
 ]
 
 setup(
@@ -38,7 +36,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            # "cost_publisher = context_adaptation.cost_publisher_updated:main",
+            "cost_publisher = context_adaptation.cost_publisher_updated:main",
             "dino_costmap_gp_speed_input_output = context_adaptation.dino_costmap_gp_speed_input_output:main",
         ],
     },

@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
-import rospy
+import rclpy
+from rclpy.node import Node
+
 from std_msgs.msg import Float32, Float32MultiArray
 from sensor_msgs.msg import Imu, Joy
 #from learned_cost_map.msg import FloatStamped
 from nav_msgs.msg import Odometry
-from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
+# from racepak.msg import rp_controls, rp_shock_sensors, rp_wheel_encoders
+from racepak_interfaces.msg import RpControls, RpShockSensors, RpWheelEncoders
 
 import numpy as np
 
 import scipy
 import scipy.signal
 from scipy.signal import welch
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 import os
 import yaml
 
-import rospkg
-
 # import pywt
 import time
+
+from ament_index_python.packages import get_package_share_directory
 
 class Buffer:
     '''Maintains a scrolling buffer to maintain a window of data in memory
@@ -104,10 +107,10 @@ def bandpower(data, sf, band, window_sec=None, relative=False):
     idx_band = np.logical_and(freqs >= low, freqs <= high)
 
     # Integral approximation of the spectrum using Simpson's rule.
-    bp = simps(psd[idx_band], dx=freq_res)
+    bp = simpson(psd[idx_band], dx=freq_res)
 
     if relative:
-        bp /= simps(psd, dx=freq_res)
+        bp /= simpson(psd, dx=freq_res)
     return bp
 
 def cost_function(data, sensor_freq, cost_name, cost_stats, freq_range=None, num_bins=None):
@@ -159,26 +162,34 @@ def cost_function(data, sensor_freq, cost_name, cost_stats, freq_range=None, num
 
     return cost
 
-class TraversabilityCostNode(object):
-    def __init__(self, cost_stats_dir, imu_topic):
+class TraversabilityCostNode(Node):
+    def __init__(self):
+
+        super().__init__("cost_publisher")
+
+        self.declare_parameter("cost_stats_dir", "")
+        self.declare_parameter("imu_topic", "")
+
+        cost_stats_dir = self.get_parameter('cost_stats_dir').get_parameter_value().string_value
+        imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
+
+        self.assets_dir = os.path.join(get_package_share_directory('context_adaptation'), 'assets')
+
+        cost_stats_dir = os.path.join(self.assets_dir, cost_stats_dir)
 
         # Set up subscribers
-        # rospy.Subscriber('/lester/imu/data', Imu, self.handle_imu, queue_size=1)
-        rospy.Subscriber(imu_topic, Imu, self.handle_imu, queue_size=1)
-        rospy.Subscriber('/shock_pos', rp_shock_sensors, self.handle_shock, queue_size=1)
-        # rospy.Subscriber('/wheel_rpm', rp_wheel_encoders, self.handle_wheel, queue_size=1)
-        rospy.Subscriber('/mux/joy', Joy, self.handle_joy, queue_size=1)
-        rospy.Subscriber('/terrain_mismatch', Float32, self.handle_terrain, queue_size=3)
-        # rospy.Subscriber('/odometry/filtered_odom', Odometry, self.handle_odom, queue_size=1)
-        rospy.Subscriber('/integrated_to_init', Odometry, self.handle_odom, queue_size=1)
-
+        self.create_subscription(Imu, imu_topic, self.handle_imu, 1)
+        self.create_subscription(RpShockSensors, '/shock_pos', self.handle_shock, 1)
+        self.create_subscription(Joy, '/mux/joy', self.handle_joy, 1)
+        self.create_subscription(Float32, '/terrain_mismatch', self.handle_terrain, 3)
+        self.create_subscription(Odometry, '/integrated_to_init', self.handle_odom, 1)
 
         # Set up publishers
         self.cost = 0
-        self.cost_publisher = rospy.Publisher('/traversability_cost', Float32, queue_size=10)
-        self.cost_array_publisher = rospy.Publisher('/traversability_breakdown', Float32MultiArray, queue_size=10)
-        self.cost_publisher_baseline = rospy.Publisher('/traversability_cost_baseline', Float32, queue_size=10)
-        self.speed_mismatch_publisher = rospy.Publisher('/speed_mismatch', Float32, queue_size=10)
+        self.cost_publisher = self.create_publisher(Float32, '/traversability_cost', 10)
+        self.cost_array_publisher = self.create_publisher(Float32MultiArray, '/traversability_breakdown', 10)
+        self.cost_publisher_baseline = self.create_publisher(Float32, '/traversability_cost_baseline', 10)
+        self.speed_mismatch_publisher = self.create_publisher(Float32, '/speed_mismatch', 10)
 
         self.params = {'IMU_min_freq': {'z': 2, 'y': 9, 'x': 0}, 'IMU_max_freq': {'z': 30, 'y': 13, 'x': 22}, 'IMU_mult': {'z': 1.0, 'y': 0.7, 'x': 0.6}, 'shock_min_freq': 0, 'shock_max_freq': 46, 'mean_mult': 0.1, 'shock_mult': 0.5, 'cutoff_factor': 0.6, 'ALL_MAX': 0.09220535518703862, 'ALL_MIN': 0.002474401263335543, 'ALL_AVG': 0.019438000929697122}
 
@@ -188,7 +199,7 @@ class TraversabilityCostNode(object):
             temp = self.stats[key]
             temp = np.array(temp)
             self.stats[key] = temp
-        print('___________________-')
+        self.get_logger().info('___________________')
         # Set data buffer
         pad_val = Imu()
         pad_val.linear_acceleration.z = 9.81
@@ -218,7 +229,7 @@ class TraversabilityCostNode(object):
         self.cost_stats_dir = cost_stats_dir
 
         with open(cost_stats_dir, 'r') as f:
-            self.all_costs_stats = yaml.safe_load(f)
+            self.all_costs_stats = yaml.load(f, Loader=yaml.FullLoader)
         # Information about sensor and sensor frequency, Min and max frequencies set the band to be analyzed for the cost function.
         # self.cost_name = "freq_bins_5"
         self.cost_name = "freq_band_1_30"
@@ -247,6 +258,9 @@ class TraversabilityCostNode(object):
         self.desired_vel = None
 
         self.cwt_cost = 0
+
+        self.get_logger().info("cost_publisher node initialized");
+        self.timer = self.create_timer(0.01, self.dummy_timer_callback) # 100hz
 
     def handle_terrain(self,msg):
         diff = msg.data
@@ -291,8 +305,8 @@ class TraversabilityCostNode(object):
         self.desired_vel = speed
 
     def handle_imu(self, msg):
-        print("-----")
-        print("Received IMU message")
+        self.get_logger().info("-----")
+        self.get_logger().info("Received IMU message")
 
         imu_data = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z, msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
 
@@ -330,12 +344,12 @@ class TraversabilityCostNode(object):
         jerk = np.mean(np.abs(np.diff(self.bufferL.data[-30:])))
         cost += jerk
 
-        print(f"Publishing cost: {cost}", self.diff_cost)
+        self.get_logger().info(f"Publishing cost: {cost}, {self.diff_cost}")
         cost_msg = Float32()
 
         cost_msg.data = cost
         self.cost_publisher.publish(cost_msg)
-        print("Published cost!")
+        self.get_logger().info("Published cost!")
 
 
     def handle_shock(self, msg):
@@ -348,20 +362,19 @@ class TraversabilityCostNode(object):
 
         self.shock_cost = costL
 
+    def dummy_timer_callback(self) :
+        pass
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = TraversabilityCostNode()
+    rclpy.spin(node)
+
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    rospy.init_node("traversability_cost_publisher", log_level=rospy.INFO)
-    rospy.loginfo("Initialized traversability_cost_publisher node")
-    cost_stats_dir = rospy.get_param("~cost_stats_dir")
-    imu_topic = rospy.get_param("~imu_topic")
-    rp = rospkg.RosPack()
-    cost_stats_dir = os.path.join(rp.get_path("context_adaptation"), "assets","cost_configs") + '/' + cost_stats_dir
-    # cost_stats_dir = './wanda_cost_statistics.yaml'
-    # cost_stats_dir = './wanda_cost_statistics.yaml'
-    node = TraversabilityCostNode(cost_stats_dir, imu_topic)
-    rate = rospy.Rate(100)
-
-    while not rospy.is_shutdown():
-
-        rate.sleep()
+    main()

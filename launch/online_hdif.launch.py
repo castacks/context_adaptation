@@ -41,15 +41,15 @@ def generate_launch_description():
             }],
         ),
 
-        # # context adaptation
-        # Node(
-        #     package="context_adaptation",
-        #     executable="cost_publisher",
-        #     name="roughness_cost",
-        #     output="screen",
-        #     parameters=[{
-        #         "cost_stats_dir": "cost_configs/wanda_cost_statistics.yaml",
-        #         "imu_topic": "/novatel/imu/data",
-        #     }],
-        # ),
+        # context adaptation
+        Node(
+            package="context_adaptation",
+            executable="cost_publisher",
+            name="roughness_cost",
+            output="screen",
+            parameters=[{
+                "cost_stats_dir": "cost_configs/wanda_cost_statistics.yaml",
+                "imu_topic": "/novatel/imu/data",
+            }],
+        ),
     ])
