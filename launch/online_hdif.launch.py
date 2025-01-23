@@ -29,9 +29,10 @@ def generate_launch_description():
             name="context_clustering",
             output="screen",
             parameters=[{
+                "use_sim_time": True,
                 "config_file": "costmap_configs/GP_base.yaml",
                 "cost_topic": "/novatel/imu/data",
-                "odom_topic": "/integrated_to_init",
+                "odom_topic": "/superodometry/integrated_to_init",
                 "gridmap_topic": "/dino_gridmap",
                 "costmap_topic": "/shortrange_costmap",
                 "vel_pub_topic": "/controller/target_input",
@@ -41,15 +42,15 @@ def generate_launch_description():
             }],
         ),
 
-        # context adaptation
-        Node(
-            package="context_adaptation",
-            executable="cost_publisher",
-            name="roughness_cost",
-            output="screen",
-            parameters=[{
-                "cost_stats_dir": "cost_configs/wanda_cost_statistics.yaml",
-                "imu_topic": "/novatel/imu/data",
-            }],
-        ),
+        # # context adaptation
+        # Node(
+        #     package="context_adaptation",
+        #     executable="cost_publisher",
+        #     name="roughness_cost",
+        #     output="screen",
+        #     parameters=[{
+        #         "cost_stats_dir": "cost_configs/wanda_cost_statistics.yaml",
+        #         "imu_topic": "/novatel/imu/data",
+        #     }],
+        # ),
     ])

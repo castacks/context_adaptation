@@ -35,6 +35,8 @@ class GridMapConvert(object):
     def ros_to_numpy(self, msg):
 #        assert isinstance(msg, self.rosmsg_type()), "Got {}, expected {}".format(type(msg), self.rosmsg_type())
 
+        # print("Printing msg = ", msg.info);
+        # print("Printing msg = ", len(msg.data));
         data_out = []
 
         origin = np.array([

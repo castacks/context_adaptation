@@ -111,8 +111,8 @@ class Context_Clusterer(Node):
         self.speed_mismatch = 0.0
         self.terrain_mismatch = 0.0
 
-        self.costmap_pub = self.create_publisher(GridMap, self.costmap_topic, 2)
-        self.speedmap_pub = self.create_publisher(GridMap, '/shortrange_speedmap', 2)
+        self.costmap_pub = self.create_publisher(GridMap, self.costmap_topic, 10)
+        self.speedmap_pub = self.create_publisher(GridMap, '/shortrange_speedmap', 10)
         self.max_vel_pub = self.create_publisher(Float32, self.vel_pub_topic, 2)
         self.cvar_pub = self.create_publisher(Float32, '/hdif_speedmap_cvar', 2)
 
@@ -250,8 +250,10 @@ class Context_Clusterer(Node):
             self.new_msg = True
 
             if len(self.channels) == 0:
+                # print("MSG layers = ", msg.layers);
                 for layer in msg.layers:
-                    if 'VLAD' in layer:
+                    # if 'VLAD' in layer:
+                    if 'dino' in layer :
                         self.channels.append(layer)
 
                 self.grid_map_cvt.channels = self.channels
@@ -313,7 +315,9 @@ class Context_Clusterer(Node):
 
                 gridmap = self.grid_map_cvt.ros_to_numpy(self.dino_map)
 
-                msg_header = self.dino_map.info.header
+                # msg_header = self.dino_map.info.header # ros1
+                msg_header = self.dino_map.header # ros2
+
                 self.new_msg = False
             else:
                 gridmap = None
@@ -345,6 +349,8 @@ class Context_Clusterer(Node):
         if np.any(xloc > self.gridmap_size) or np.any(yloc > self.gridmap_size): #Super Odometry probably borked, wait till back online
             print("WARNING: OUT OF BOUNDS! Not computing costmap")
             return
+
+        # self.get_logger().info("++++++++++++++++++ L349 after np.any +++++++++++++ ");
 
         classes = da[xloc,yloc]
         spot = stats.mode(classes)[0]
@@ -532,21 +538,21 @@ class Context_Clusterer(Node):
         # costmap *= 0.0
         ids = np.where(unc_map != 0)
         costmap[ids] = unc_map[ids]
-        costmap[~np.isfinite(costmap)] = 0.0
+        costmap[~np.isfinite(costmap)] = 0.0       
         costmap[zero_mask] = self.unknown_cost
         speedmap[zero_mask] = self.unknown_speed
 
 
-        print("Speedmap Min/Max ", speedmap.min(), speedmap.max(), speedmap[xloc[0],yloc[0]])
+        # print("Speedmap Min/Max ", speedmap.min(), speedmap.max(), speedmap[xloc[0],yloc[0]])
 
         speedmap = np.clip(speedmap,0,self.max_velocity)
 
         # costmap_msg = self.costmap_to_gridmap(costmap, info, variance = var_viz)
-        costmap_msg = self.costmap_to_gridmap(costmap, info)
+        costmap_msg = self.costmap_to_gridmap(costmap, info, msg_header)
         self.costmap_pub.publish(costmap_msg)
 
 
-        speedmap_msg = self.costmap_to_gridmap(speedmap, info, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
+        speedmap_msg = self.costmap_to_gridmap(speedmap, info, msg_header, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
         self.speedmap_pub.publish(speedmap_msg)
 
 
@@ -554,9 +560,11 @@ class Context_Clusterer(Node):
         cvar_msg.data = self.cvar_alpha
         self.cvar_pub.publish(cvar_msg)
 
-        print(time.perf_counter() - now, 'total time', self.buffer_idx, 'buffer_idx')
+        # print(time.perf_counter() - now, 'total time', self.buffer_idx, 'buffer_idx')
+        self.get_logger().info("Published costmap and speedmap")
 
-    def costmap_to_gridmap(self, costmap, info, costmap_layer='costmap', variance = None, norm_factor = None):
+
+    def costmap_to_gridmap(self, costmap, info, msg_header, costmap_layer='costmap', variance = None, norm_factor = None):
         """
         convert costmap into gridmap msg
 
@@ -567,6 +575,7 @@ class Context_Clusterer(Node):
         """
         costmap_msg = GridMap()
         costmap_msg.info = info
+        costmap_msg.header = msg_header
         # print("FRAME _ ", costmap_msg.info.header.frame_id)
         costmap_msg.layers = [costmap_layer]
 
@@ -586,7 +595,7 @@ class Context_Clusterer(Node):
             )
         )
 
-        costmap_layer_msg.data = costmap[::-1, ::-1].flatten()
+        costmap_layer_msg.data = costmap[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(costmap_layer_msg)
 
         #add dummy elevation
@@ -614,7 +623,7 @@ class Context_Clusterer(Node):
             )
         )
 
-        gridmap_layer_msg.data = layer_data[::-1, ::-1].flatten()
+        gridmap_layer_msg.data = layer_data[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(gridmap_layer_msg)
 
         # vcostmap = np.clip(costmap,0,1)
@@ -649,7 +658,7 @@ class Context_Clusterer(Node):
             )
         )
 
-        gridmap_layer_msg.data = gridmap_color[::-1, ::-1].flatten()
+        gridmap_layer_msg.data = gridmap_color[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(gridmap_layer_msg)
 
         return costmap_msg
