@@ -7,20 +7,20 @@ ROBOT:
 VLAD:
   n_clusters: 8
 BEHAVIOR:
-  buffer_size: 400 #try increasing
+  buffer_size: 400 #reduce if running slow, try to keep above 1-200
   # residual_max: 36.0
   # uncertainty_threshold: .88
   # residual_max: 27.0
   # uncertainty_threshold: .96
   residual_max: 26.0
-  uncertainty_threshold: .85
+  uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
   buffer_update_freq: 2
   cost_lengthscale: 3.0
   speed_lengthscale: 1.5
   # speed_init: 3.0
-  max_cost: .25
+  max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
   max_velocity: 6
-  velocity_margin: .6 #high on bag playback since we don't control speed
+  velocity_margin: 1.0 #high on bag playback since we don't control speed
   train_kernel: False
   costmap_cvar: .03
   unknown_cost: .1

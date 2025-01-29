@@ -1,56 +1,34 @@
 import os
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch_ros.actions import Node
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+
 from ament_index_python.packages import get_package_share_directory
 
+from launch import LaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import IncludeLaunchDescription
+from launch_ros.actions import Node
+
 def generate_launch_description():
-    # visual_mapping_dir = get_package_share_directory('physics_atv_visual_mapping')
-    # visual_mapping_launcher = os.path.join(visual_mapping_dir, 'launch', 'dino_localmapping.launch.py')
+    # context_adaptation
+    pkg_dir = get_package_share_directory('context_adaptation')
+    param_file = os.path.join(pkg_dir, 'config', 'salon_dino.yaml')
 
-    return LaunchDescription([       
-        # # visual mapping
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource(visual_mapping_launcher)
-        # ),
+    cost_publisher = Node(
+        package='context_adaptation',
+        executable='cost_publisher',
+        parameters=[param_file],
+        output='screen'
+    )
 
-        # Declare the use_sim_time argument
-        DeclareLaunchArgument(
-            "use_sim_time",
-            default_value="true",
-            description="Use simulation (Gazebo) clock if true",
-        ),
+    context_clusterer = Node(
+        package='context_adaptation',
+        executable='dino_costmap_gp_speed_input_output',
+        parameters=[param_file],
+        output='screen'
+    )    
 
-        # context adaptation
-        Node(
-            package="context_adaptation",
-            executable="dino_costmap_gp_speed_input_output",
-            name="context_clustering",
-            output="screen",
-            parameters=[{
-                "use_sim_time": True,
-                "config_file": "costmap_configs/GP_base.yaml",
-                "cost_topic": "/novatel/imu/data",
-                "odom_topic": "/superodometry/integrated_to_init",
-                "gridmap_topic": "/dino_gridmap",
-                "costmap_topic": "/shortrange_costmap",
-                "vel_pub_topic": "/controller/target_input",
-                "viz": False,
-                "pub_anchors": False,
-                "pub_stats": True,
-            }],
-        ),
+    ld = LaunchDescription()
+    ld.add_action(cost_publisher)
+    ld.add_action(context_clusterer)
 
-        # # context adaptation
-        # Node(
-        #     package="context_adaptation",
-        #     executable="cost_publisher",
-        #     name="roughness_cost",
-        #     output="screen",
-        #     parameters=[{
-        #         "cost_stats_dir": "cost_configs/wanda_cost_statistics.yaml",
-        #         "imu_topic": "/novatel/imu/data",
-        #     }],
-        # ),
-    ])
+
+    return ld    

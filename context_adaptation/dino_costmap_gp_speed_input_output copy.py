@@ -69,35 +69,29 @@ class Context_Clusterer(Node):
 
         super().__init__("dino_costmap_gp_speed_input_output");
 
-        self.use_sim_time = self.get_parameter('use_sim_time').get_parameter_value().bool_value
-        self.get_logger().info(f"use_sim_time = {self.use_sim_time}")
-
         self.declare_parameter("cost_topic", "")
         self.declare_parameter("odom_topic", "")
+        self.declare_parameter("gridmap_topic", "")
 
         self.declare_parameter("config_file", "")
-
-        self.declare_parameter("gridmap_topic", "")
         self.declare_parameter("costmap_topic", "")
-        self.declare_parameter("speedmap_topic", "")
-        self.declare_parameter("cvar_speedmap_topic", "")        
-
         self.declare_parameter("vel_pub_topic", "")
-        self.declare_parameter("hdif_max_roughness_topic", "")
-        self.declare_parameter("hdif_cvar_topic", "")
         
+        self.declare_parameter("viz", False)
+        self.declare_parameter("pub_anchors", False)
+        self.declare_parameter("pub_stats", True)
+
         self.cost_topic = self.get_parameter('cost_topic').get_parameter_value().string_value
         self.odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
-
         self.gridmap_topic = self.get_parameter('gridmap_topic').get_parameter_value().string_value
-        self.costmap_topic = self.get_parameter('costmap_topic').get_parameter_value().string_value
-        self.speedmap_topic = self.get_parameter('speedmap_topic').get_parameter_value().string_value
-        self.cvar_speedmap_topic = self.get_parameter('cvar_speedmap_topic').get_parameter_value().string_value
 
         self.config_file = self.get_parameter('config_file').get_parameter_value().string_value
+        self.costmap_topic = self.get_parameter('costmap_topic').get_parameter_value().string_value
         self.vel_pub_topic = self.get_parameter('vel_pub_topic').get_parameter_value().string_value
-        self.hdif_max_roughness_topic = self.get_parameter('hdif_max_roughness_topic').get_parameter_value().string_value
-        self.hdif_cvar_topic = self.get_parameter('hdif_cvar_topic').get_parameter_value().string_value
+
+        self.viz = self.get_parameter('viz').get_parameter_value().bool_value
+        self.pub_anchors = self.get_parameter('pub_anchors').get_parameter_value().bool_value
+        self.pub_stats = self.get_parameter('pub_stats').get_parameter_value().bool_value
 
         self.assets_dir = os.path.join(get_package_share_directory('context_adaptation'), 'assets')
 
@@ -118,9 +112,9 @@ class Context_Clusterer(Node):
         self.terrain_mismatch = 0.0
 
         self.costmap_pub = self.create_publisher(GridMap, self.costmap_topic, 10)
-        self.speedmap_pub = self.create_publisher(GridMap, self.speedmap_topic, 10)
+        self.speedmap_pub = self.create_publisher(GridMap, '/shortrange_speedmap', 10)
         self.max_vel_pub = self.create_publisher(Float32, self.vel_pub_topic, 2)
-        self.cvar_pub = self.create_publisher(Float32, self.cvar_speedmap_topic, 2)
+        self.cvar_pub = self.create_publisher(Float32, '/hdif_speedmap_cvar', 2)
 
         height_diff = -1*config['ROBOT']['frame_height']
         front_x = config['ROBOT']['front_x']
@@ -170,20 +164,20 @@ class Context_Clusterer(Node):
 
         #probably would be smarter to use the actual update buffer method oops
         avoid_class = 3 #looks like 3 or 5|6
-        num_insert = 8
+        num_insert = 0
         spread = 1.2
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 1.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
-           21.984331, 24.273615]).cuda() / self.residual_max
+        # avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+        # avoid_classes = np.zeros((num_insert)) + avoid_class
+        # avoid_labels = torch.ones((num_insert,1)).cuda()
+        # avoid_data[:,-1] = 1.0
+        # for i in range(num_insert):
+        #     avoid_data[i,-2] = i*spread
+        #     avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
+        #    21.984331, 24.273615]).cuda() / self.residual_max
 
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+        # self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        # self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
+        # self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
         self.num_insert = num_insert
         self.buffer_idx += self.num_insert
@@ -192,13 +186,13 @@ class Context_Clusterer(Node):
         self.likelihood = None
         self.gp_params = None
 
-        self.gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input'), weights_only=True)
+        # self.gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input'), weights_only=True)
 
         self.speed_gp = None
         self.speed_likelihood = None
         self.speed_gp_params = None
         self.speed_likelihood = None
-        self.speed_gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new'), weights_only=True)
+        # self.speed_gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new'), weights_only=True)
 
         self.speed_gp_indices = [0,1,2,3,4,5,6,7,9]
 
@@ -220,12 +214,11 @@ class Context_Clusterer(Node):
 
         self.create_subscription(Float32, self.cost_topic, self.handle_cost, 1)
         self.create_subscription(Odometry, self.odom_topic, self.handle_odom, 1)
-        self.create_subscription(Float32, self.hdif_max_roughness_topic, self.handle_max_roughness, 1)
-        self.create_subscription(Float32, self.hdif_cvar_topic, self.handle_cvar, 1)
+        self.create_subscription(Float32, '/hdif_max_roughness', self.handle_max_roughness, 1)
+        self.create_subscription(Float32, '/hdif_cvar', self.handle_cvar, 1)
+        self.get_logger().info("context_clustering node initialized");
 
         self.timer = self.create_timer(0.1, self.run_map) # 10hz
-        self.get_logger().info(f"{self.gridmap_topic, self.costmap_topic, self.speedmap_topic}")
-        self.get_logger().info("context_clustering node initialized");
 
 
     def handle_odom(self, msg):
@@ -237,7 +230,6 @@ class Context_Clusterer(Node):
 
 
     def handle_cost(self, msg):
-        # self.get_logger().info("received cost data")
         self.cost = msg.data
         self.cost -= self.cost_offset
         self.rough_history = self.rough_history + (msg.data - self.rough_history) * .2
@@ -387,9 +379,9 @@ class Context_Clusterer(Node):
                     sel_max = edges[most_vel+1]
                     train_vels = self.train_in_buffer[:,-2].cpu().numpy()
                     insert_idx = np.random.choice(np.where((self.train_buffer_classes == most_class) & (train_vels > sel_min) & (train_vels < sel_max))[0])
-                    if insert_idx > self.num_insert: #don't remove human labels
-                        self.insert_train_buffer(input_sample, self.cost, spot, insert_idx)
-                    # self.insert_train_buffer_FIFO(input_sample, self.cost, spot)
+                    # if insert_idx > self.num_insert: #don't remove human labels
+                        # self.insert_train_buffer(input_sample, self.cost, spot, insert_idx)
+                    self.insert_train_buffer_FIFO(input_sample, self.cost, spot)
                 else:
                     self.update_train_buffer(input_sample, self.cost, spot)
 

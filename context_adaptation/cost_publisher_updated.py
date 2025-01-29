@@ -167,29 +167,53 @@ class TraversabilityCostNode(Node):
 
         super().__init__("cost_publisher")
 
+        self.use_sim_time = self.get_parameter('use_sim_time').get_parameter_value().bool_value
+        self.get_logger().info(f"use_sim_time = {self.use_sim_time}")
+
         self.declare_parameter("cost_stats_dir", "")
+
+        self.declare_parameter("cost_topic", "")
+        self.declare_parameter("cost_array_topic", "")
+        self.declare_parameter("cost_baseline_topic", "")
+        self.declare_parameter("speed_mismatch_topic", "")
+
         self.declare_parameter("imu_topic", "")
+        self.declare_parameter("odom_topic", "")
+        self.declare_parameter("vel_pub_topic", "")
+        self.declare_parameter("joy_topic", "")
+        self.declare_parameter("terrain_mismatch_topic", "")
+        self.declare_parameter("shock_topic", "")
 
         cost_stats_dir = self.get_parameter('cost_stats_dir').get_parameter_value().string_value
+        cost_topic = self.get_parameter('cost_topic').get_parameter_value().string_value
+        cost_array_topic = self.get_parameter('cost_array_topic').get_parameter_value().string_value
+        cost_baseline_topic = self.get_parameter('cost_baseline_topic').get_parameter_value().string_value
+        speed_mismatch_topic = self.get_parameter('speed_mismatch_topic').get_parameter_value().string_value
+
         imu_topic = self.get_parameter('imu_topic').get_parameter_value().string_value
+        odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
+        vel_pub_topic = self.get_parameter('vel_pub_topic').get_parameter_value().string_value
+        joy_topic = self.get_parameter('joy_topic').get_parameter_value().string_value
+        terrain_mismatch_topic = self.get_parameter('terrain_mismatch_topic').get_parameter_value().string_value
+        shock_topic = self.get_parameter('shock_topic').get_parameter_value().string_value
 
         self.assets_dir = os.path.join(get_package_share_directory('context_adaptation'), 'assets')
 
         cost_stats_dir = os.path.join(self.assets_dir, cost_stats_dir)
 
         # Set up subscribers
-        self.create_subscription(Imu, imu_topic, self.handle_imu, 1)
-        self.create_subscription(RpShockSensors, '/shock_pos', self.handle_shock, 1)
-        self.create_subscription(Joy, '/mux/joy', self.handle_joy, 1)
-        self.create_subscription(Float32, '/terrain_mismatch', self.handle_terrain, 3)
-        self.create_subscription(Odometry, '/integrated_to_init', self.handle_odom, 1)
+        self.create_subscription(Imu, imu_topic, self.handle_imu, 10)
+        self.create_subscription(RpShockSensors, shock_topic, self.handle_shock, 10)
+        self.create_subscription(Joy, joy_topic, self.handle_joy, 10)
+        self.create_subscription(Float32, terrain_mismatch_topic, self.handle_terrain, 30)
+        self.create_subscription(Odometry, odom_topic, self.handle_odom, 10)
 
         # Set up publishers
         self.cost = 0
-        self.cost_publisher = self.create_publisher(Float32, '/traversability_cost', 10)
-        self.cost_array_publisher = self.create_publisher(Float32MultiArray, '/traversability_breakdown', 10)
-        self.cost_publisher_baseline = self.create_publisher(Float32, '/traversability_cost_baseline', 10)
-        self.speed_mismatch_publisher = self.create_publisher(Float32, '/speed_mismatch', 10)
+        self.cost_publisher = self.create_publisher(Float32, cost_topic, 10)
+        self.cost_array_publisher = self.create_publisher(Float32MultiArray, cost_array_topic, 10)
+        self.cost_publisher_baseline = self.create_publisher(Float32, cost_baseline_topic, 10)
+        self.speed_mismatch_publisher = self.create_publisher(Float32, speed_mismatch_topic, 10)
 
         self.params = {'IMU_min_freq': {'z': 2, 'y': 9, 'x': 0}, 'IMU_max_freq': {'z': 30, 'y': 13, 'x': 22}, 'IMU_mult': {'z': 1.0, 'y': 0.7, 'x': 0.6}, 'shock_min_freq': 0, 'shock_max_freq': 46, 'mean_mult': 0.1, 'shock_mult': 0.5, 'cutoff_factor': 0.6, 'ALL_MAX': 0.09220535518703862, 'ALL_MIN': 0.002474401263335543, 'ALL_AVG': 0.019438000929697122}
 
@@ -260,7 +284,9 @@ class TraversabilityCostNode(Node):
         self.cwt_cost = 0
 
         self.get_logger().info("cost_publisher node initialized");
-        self.timer = self.create_timer(0.01, self.dummy_timer_callback) # 100hz
+
+        self.cost_for_throttle = None;
+        self.timer = self.create_timer(1.0, self.callback_cost_throttle) # 100hz
 
     def handle_terrain(self,msg):
         diff = msg.data
@@ -305,8 +331,8 @@ class TraversabilityCostNode(Node):
         self.desired_vel = speed
 
     def handle_imu(self, msg):
-        self.get_logger().info("-----")
-        self.get_logger().info("Received IMU message")
+        # self.get_logger().info("-----")
+        # self.get_logger().info("Received IMU message")
 
         imu_data = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z, msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
 
@@ -344,12 +370,14 @@ class TraversabilityCostNode(Node):
         jerk = np.mean(np.abs(np.diff(self.bufferL.data[-30:])))
         cost += jerk
 
-        self.get_logger().info(f"Publishing cost: {cost}, {self.diff_cost}")
+        # self.get_logger().info(f"IMU cost: {cost:.4f}, {self.diff_cost}")
+        self.cost_for_throttle = cost # use for throttled logging
+
         cost_msg = Float32()
 
         cost_msg.data = cost
         self.cost_publisher.publish(cost_msg)
-        self.get_logger().info("Published cost!")
+        # self.get_logger().info("Published cost!")
 
 
     def handle_shock(self, msg):
@@ -362,8 +390,11 @@ class TraversabilityCostNode(Node):
 
         self.shock_cost = costL
 
-    def dummy_timer_callback(self) :
-        pass
+    def callback_cost_throttle(self) :
+        if self.cost_for_throttle is None :
+            return;
+            
+        self.get_logger().info(f"IMU cost: {self.cost_for_throttle:.4f}")
 
 
 def main(args=None):
