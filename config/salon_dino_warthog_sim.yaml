@@ -1,0 +1,42 @@
+cost_publisher:
+    ros__parameters:
+        # ros
+        use_sim_time: On 
+
+        # node specific
+        # config_file: "costmap_configs/GP_base.yaml"
+
+        cost_stats_dir: "cost_configs/wanda_cost_statistics.yaml"
+
+        cost_topic: "/warty/vfm_voxels/traversability_cost"
+        cost_array_topic: "/warty/vfm_voxels/traversability_breakdown"
+        cost_baseline_topic: "/warty/vfm_voxels/traversability_cost_baseline"
+        speed_mismatch_topic: "/warty/vfm_voxels/speed_mismatch"
+
+        imu_topic: "/warty/imu/data"    
+        odom_topic: "/warty/odometry/local"
+      
+        # shock_topic: "/shock_pos"
+        # joy_topic: "/joy"
+        # terrain_mismatch_topic: "/terrain_mismatch"
+
+
+dino_costmap_gp_speed_input_output:
+    ros__parameters:
+        # ros
+        use_sim_time: On 
+
+        # node specific
+        # config_file: "costmap_configs/GP_base.yaml"
+        cost_topic: "/warty/vfm_voxels/traversability_cost" 
+        odom_topic: "/warty/odometry/local"
+
+        gridmap_topic: "/warty/vfm_voxels/dino_gridmap"
+        # costmap_topic: "/warty/vfm_voxels/shortrange_costmap"
+        costmap_topic: "/warty/map/planning/local"
+        speedmap_topic: "/warty/vfm_voxels/shortrange_speedmap"
+        cvar_speedmap_topic: "/warty/vfm_voxels/hdif_speedmap_cvar"
+
+        hdif_max_roughness_topic: "/warty/vfm_voxels/hdif_max_roughness"
+        hdif_cvar_topic: "/warty/vfm_voxels/hdif_cvar"
+        vel_pub_topic: "/warty/vfm_voxels/controller/target_input"        

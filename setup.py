@@ -39,6 +39,7 @@ setup(
         "console_scripts": [
             "cost_publisher = context_adaptation.cost_publisher_updated:main",
             "dino_costmap_gp_speed_input_output = context_adaptation.dino_costmap_gp_speed_input_output:main",
+            "cost_publisher_arl_sim = context_adaptation.cost_publisher_updated_arl_sim:main",
         ],
     },
 )

@@ -50,6 +50,8 @@ except:
     CMAP = matplotlib.pyplot.get_cmap('magma')
     SMAP = matplotlib.pyplot.get_cmap('jet')    
 
+import ros2_numpy_cpp    
+
 class ExactGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood,lengthscale):
         super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
@@ -75,7 +77,7 @@ class Context_Clusterer(Node):
         self.declare_parameter("cost_topic", "")
         self.declare_parameter("odom_topic", "")
 
-        self.declare_parameter("config_file", "")
+        self.declare_parameter("config_file", "costmap_configs/GP_base.yaml")
 
         self.declare_parameter("gridmap_topic", "")
         self.declare_parameter("costmap_topic", "")
@@ -101,6 +103,9 @@ class Context_Clusterer(Node):
 
         self.assets_dir = os.path.join(get_package_share_directory('context_adaptation'), 'assets')
 
+        self.get_logger().info("=" * 40)
+        self.get_logger().info(f"CONTEXT_ADAPTATION CONFIG FILE = {self.config_file}");
+        self.get_logger().info("=" * 40)
         with open(os.path.join(self.assets_dir, self.config_file), 'r') as file :
             config = yaml.load(file, Loader=yaml.FullLoader)
 
@@ -223,8 +228,8 @@ class Context_Clusterer(Node):
         self.create_subscription(Float32, self.hdif_max_roughness_topic, self.handle_max_roughness, 1)
         self.create_subscription(Float32, self.hdif_cvar_topic, self.handle_cvar, 1)
 
-        self.timer = self.create_timer(0.1, self.run_map) # 10hz
-        self.get_logger().info(f"{self.gridmap_topic, self.costmap_topic, self.speedmap_topic}")
+        # self.timer = self.create_timer(0.1, self.run_map) # 10hz
+        # self.get_logger().info(f"{self.gridmap_topic, self.costmap_topic, self.speedmap_topic}")
         self.get_logger().info("context_clustering node initialized");
 
 
@@ -253,18 +258,35 @@ class Context_Clusterer(Node):
 
 
     def handle_map(self,msg):
-        with self._lock:
-            self.dino_map = msg
-            self.new_msg = True
+        # with self._lock:
+        #     self.dino_map = msg
+        #     self.new_msg = True
 
-            if len(self.channels) == 0:
-                # print("MSG layers = ", msg.layers);
-                for layer in msg.layers:
-                    # if 'VLAD' in layer:
-                    if 'dino' in layer :
-                        self.channels.append(layer)
+        #     if len(self.channels) == 0:
+        #         # print("MSG layers = ", msg.layers);
+        #         for layer in msg.layers:
+        #             # if 'VLAD' in layer:
+        #             if 'dino' in layer :
+        #                 self.channels.append(layer)
 
-                self.grid_map_cvt.channels = self.channels
+        #         self.grid_map_cvt.channels = self.channels
+
+        # self.get_logger().info("=" * 80)
+        # self.get_logger().info("RECEIVED NEW DINO MAP");
+        # self.get_logger().info("=" * 80)
+        self.dino_map = msg
+        self.new_msg = True
+
+        if len(self.channels) == 0:
+            # self.get_logger().info(f"+++++++++++++++ MSG layers = {msg.layers} +++++++++++++++");
+            for layer in msg.layers:
+                # if 'VLAD' in layer:
+                if 'dino' in layer :
+                    self.channels.append(layer)
+
+            self.grid_map_cvt.channels = self.channels 
+
+        self.run_map();       
 
 
     def update_train_buffer(self,input,label,class_id):
@@ -302,33 +324,56 @@ class Context_Clusterer(Node):
 
 
     def run_map(self):
+        # self.get_logger().info("=" * 80)
+        # self.get_logger().info("ENTERED MAP RUNNER");
+        # self.get_logger().info("=" * 80)        
         now = time.perf_counter()
         if self.hz_counter == 5000000:
             self.hz_counter = 0
         self.hz_counter += 1
 
-        if not self.new_msg:
-            self.get_logger().info('no new map')
-            return
+        # if not self.new_msg:
+        #     self.get_logger().info('no new map')
+        #     return
 
-        with self._lock:
-            if self.dino_map is not None:
-                info = self.dino_map.info
-                nx = int(info.length_x / info.resolution)
-                ny = int(info.length_y / info.resolution)
-                self.grid_map_cvt.size = [nx, ny]
+        # ======================= #
+        # with self._lock:
+            # if self.dino_map is not None:
+            #     info = self.dino_map.info
+            #     nx = int(info.length_x / info.resolution)
+            #     ny = int(info.length_y / info.resolution)
+            #     self.grid_map_cvt.size = [nx, ny]
 
-                #HACK assumes square for now
-                self.gridmap_size = nx
+            #     #HACK assumes square for now
+            #     self.gridmap_size = nx
 
-                gridmap = self.grid_map_cvt.ros_to_numpy(self.dino_map)
+            #     gridmap = self.grid_map_cvt.ros_to_numpy(self.dino_map)
 
-                # msg_header = self.dino_map.info.header # ros1
-                msg_header = self.dino_map.header # ros2
+            #     # msg_header = self.dino_map.info.header # ros1
+            #     msg_header = self.dino_map.header # ros2
 
-                self.new_msg = False
-            else:
-                gridmap = None
+            #     self.new_msg = False
+            # else:
+            #     gridmap = None
+
+        if self.dino_map is not None:
+            info = self.dino_map.info
+            nx = int(info.length_x / info.resolution)
+            ny = int(info.length_y / info.resolution)
+            self.grid_map_cvt.size = [nx, ny]
+
+            #HACK assumes square for now
+            self.gridmap_size = nx
+
+            gridmap = self.grid_map_cvt.ros_to_numpy(self.dino_map)
+
+            # msg_header = self.dino_map.info.header # ros1
+            msg_header = self.dino_map.header # ros2
+
+            self.new_msg = False
+        else:
+            gridmap = None            
+        # ======================= #
 
         if gridmap is None:
             self.get_logger().info("NO MAP")
@@ -372,6 +417,7 @@ class Context_Clusterer(Node):
         if (self.velocity > .3) and self.hz_counter % self.buffer_update_freq == 0:
             # input_sample = input[:,xloc[0],yloc[0]]
             input_sample = input[:,xloc,yloc].mean(dim=1)
+            # self.get_logger().info(f"INPUT[:,xloc,yloc] SHAPE, input_sample shape = {input[:,xloc,yloc].shape}, {input_sample.shape}")            
             input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]),torch.Tensor([self.cost]))).cuda()
 
             if torch.count_nonzero(input_sample[:-2]) == 0:
@@ -554,13 +600,15 @@ class Context_Clusterer(Node):
 
         speedmap = np.clip(speedmap,0,self.max_velocity)
 
-        # costmap_msg = self.costmap_to_gridmap(costmap, info, variance = var_viz)
-        costmap_msg = self.costmap_to_gridmap(costmap, info, msg_header)
-        self.costmap_pub.publish(costmap_msg)
+        # # costmap_msg = self.costmap_to_gridmap(costmap, info, variance = var_viz)
+        # costmap_msg = self.costmap_to_gridmap(costmap, info, msg_header, costmap_layer='cost')
+        # self.costmap_pub.publish(costmap_msg)
+        # speedmap_msg = self.costmap_to_gridmap(speedmap, info, msg_header, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
+        # self.speedmap_pub.publish(speedmap_msg)
 
-
-        speedmap_msg = self.costmap_to_gridmap(speedmap, info, msg_header, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
-        self.speedmap_pub.publish(speedmap_msg)
+        costmap_msg = self.costmap_speedmap_to_gridmap(costmap, speedmap, info, msg_header, 
+            costmap_layer='cost', speedmap_layer='speed')
+        self.costmap_pub.publish(costmap_msg)        
 
 
         cvar_msg = Float32()
@@ -570,8 +618,11 @@ class Context_Clusterer(Node):
         # print(time.perf_counter() - now, 'total time', self.buffer_idx, 'buffer_idx')
         self.get_logger().info("Published costmap and speedmap")
 
+        # self.get_logger().info("=" * 80)
+        # self.get_logger().info("PUBLISHED MAP");
+        # self.get_logger().info("=" * 80)
 
-    def costmap_to_gridmap(self, costmap, info, msg_header, costmap_layer='costmap', variance = None, norm_factor = None):
+    def costmap_to_gridmap(self, costmap, info, msg_header, costmap_layer='cost', variance = None, norm_factor = None):
         """
         convert costmap into gridmap msg
 
@@ -641,7 +692,7 @@ class Context_Clusterer(Node):
             vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
         # vcostmap = costmap
 
-        if costmap_layer == 'costmap':
+        if costmap_layer == 'cost':
             gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
         else:
             gridmap_cs = (SMAP(vcostmap) * 255).astype(np.int32)
@@ -669,6 +720,128 @@ class Context_Clusterer(Node):
         costmap_msg.data.append(gridmap_layer_msg)
 
         return costmap_msg
+
+    def costmap_speedmap_to_gridmap(self, costmap, speedmap, info, msg_header, costmap_layer='cost', speedmap_layer='speed', variance = None, norm_factor = None):
+        """
+        convert costmap into gridmap msg
+
+        Args:
+            costmap: The data to load into the gridmap
+            msg: The input msg to extrach metadata from
+            costmap: The name of the layer to get costmap from
+        """
+        costmap_msg = GridMap()
+        costmap_msg.info = info
+        costmap_msg.header = msg_header
+        # print("FRAME _ ", costmap_msg.info.header.frame_id)
+        costmap_msg.layers = [costmap_layer]
+
+        costmap_layer_msg = Float32MultiArray()
+        costmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="column_index",
+                size=costmap.shape[0],
+                stride=costmap.shape[0]
+            )
+        )
+        costmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="row_index",
+                size=costmap.shape[0],
+                stride=costmap.shape[0] * costmap.shape[1]
+            )
+        )
+
+        # self.get_logger().info(f"COSTMAP TYPE and SHAPE = {type(costmap), costmap.dtype, costmap.shape}");
+        # self.get_logger().info(f"COSTMAP MIN/MAX = {costmap.min(), costmap.max()}");
+        costmap_layer_msg.data = (costmap * 255)[::-1, ::-1].flatten().tolist()
+        costmap_msg.data.append(costmap_layer_msg)
+
+        #add dummy elevation
+        costmap_msg.layers.append('elevation')
+        # layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 #+ costmap
+
+        if variance is not None:
+            layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 - variance*5
+        else:
+            layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 #+ costmap
+        # print(variance.max(), variance.min())
+        gridmap_layer_msg = Float32MultiArray()
+        gridmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="column_index",
+                size=layer_data.shape[0],
+                stride=layer_data.shape[0]
+            )
+        )
+        gridmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="row_index",
+                size=layer_data.shape[0],
+                stride=layer_data.shape[0] * layer_data.shape[1]
+            )
+        )
+
+        gridmap_layer_msg.data = layer_data[::-1, ::-1].flatten().tolist()
+        costmap_msg.data.append(gridmap_layer_msg)
+
+        # speedmap layers
+        costmap_msg.layers.append('speed')        
+        speedmap_layer_msg = Float32MultiArray()
+        speedmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="column_index",
+                size=speedmap.shape[0],
+                stride=speedmap.shape[0]
+            )
+        )
+        speedmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="row_index",
+                size=speedmap.shape[0],
+                stride=speedmap.shape[0] * speedmap.shape[1]
+            )
+        )
+
+        speedmap_layer_msg.data = speedmap[::-1, ::-1].flatten().tolist()
+        costmap_msg.data.append(speedmap_layer_msg)
+
+        # vcostmap = np.clip(costmap,0,1)
+        if norm_factor is None:
+            # vcostmap = np.clip(costmap*2.,0,.6)/.6
+            vcostmap = np.clip(costmap*2.,0,1)
+        else:
+            vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
+        # vcostmap = costmap
+
+        if costmap_layer == 'cost':
+            gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
+        else:
+            gridmap_cs = (SMAP(vcostmap) * 255).astype(np.int32)
+        gridmap_color = gridmap_cs[..., 0] * (2**16) + gridmap_cs[..., 1] * (2**8) + gridmap_cs[..., 2]
+        gridmap_color = gridmap_color.view(dtype=np.float32)
+
+        costmap_msg.layers.append('rgb_viz')
+        gridmap_layer_msg = Float32MultiArray()
+        gridmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="column_index",
+                size=layer_data.shape[0],
+                stride=layer_data.shape[0]
+            )
+        )
+        gridmap_layer_msg.layout.dim.append(
+            MultiArrayDimension(
+                label="row_index",
+                size=layer_data.shape[0],
+                stride=layer_data.shape[0] * layer_data.shape[1]
+            )
+        )
+
+        gridmap_layer_msg.data = gridmap_color[::-1, ::-1].flatten().tolist()
+        costmap_msg.data.append(gridmap_layer_msg)
+
+        return costmap_msg        
 
 def main(args=None):
     rclpy.init(args=args)
