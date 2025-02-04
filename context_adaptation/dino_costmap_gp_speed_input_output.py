@@ -379,6 +379,9 @@ class Context_Clusterer(Node):
             self.get_logger().info("NO MAP")
             return
 
+        if self.odom_msg is None:
+            self.get_logger().info("NO ODOM")
+            return
 
         da = gridmap['data'].argmin(axis=0)
         unc_map = gridmap['data'].min(axis=0)

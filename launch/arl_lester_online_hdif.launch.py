@@ -28,8 +28,8 @@ def generate_launch_description():
             "cost_array_topic": "traversability_breakdown",
             "cost_baseline_topic": "traversability_cost_baseline",
             "speed_mismatch_topic": "speed_mismatch",
-            "imu_topic": "sensors/microstrain/ekf/imu/data",    
-            "odom_topic": "integrated_to_init",
+            "imu_topic": "/lester/sensors/ouster/imu",    
+            "odom_topic": "/lester/integrated_to_init",
         }],
         output='screen'
     )
@@ -41,7 +41,7 @@ def generate_launch_description():
             "use_sim_time": True,
             "config_file": "costmap_configs/GP_base.yaml",
             "cost_topic": "traversability_cost", 
-            "odom_topic": "integrated_to_init",
+            "odom_topic": "/lester/integrated_to_init",
             "gridmap_topic": "dino_gridmap",
             "costmap_topic": "map/planning/local",  # "/warty/vfm_voxels/shortrange_costmap",
             "speedmap_topic": "shortrange_speedmap",
