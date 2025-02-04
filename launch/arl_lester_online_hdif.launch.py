@@ -11,11 +11,11 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # salon_config_fp_arg = LaunchConfiguration("config_fp")
 
-    # # context_adaptation
-    # pkg_dir = get_package_share_directory('context_adaptation')
-    # param_file = PathJoinSubstitution([
-    #     pkg_dir, 'config', "salon_dino_warthog_sim.yaml" # salon_config_fp_arg
-    # ])
+    # context_adaptation
+    pkg_dir = get_package_share_directory('context_adaptation')
+    param_file = PathJoinSubstitution([
+        pkg_dir, 'config', "salon_dino_warthog_sim.yaml" # salon_config_fp_arg
+    ])
 
     cost_publisher = Node(
         package='context_adaptation',
@@ -28,7 +28,7 @@ def generate_launch_description():
             "cost_array_topic": "traversability_breakdown",
             "cost_baseline_topic": "traversability_cost_baseline",
             "speed_mismatch_topic": "speed_mismatch",
-            "imu_topic": "imu/data",    
+            "imu_topic": "sensors/microstrain/ekf/imu/data",    
             "odom_topic": "integrated_to_init",
         }],
         output='screen'
