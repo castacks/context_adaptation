@@ -656,7 +656,7 @@ class Context_Clusterer(Node):
             )
         )
 
-        costmap_layer_msg.data = costmap[::-1, ::-1].flatten().tolist()
+        costmap_layer_msg.data = (costmap*3)[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(costmap_layer_msg)
 
         #add dummy elevation

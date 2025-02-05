@@ -42,7 +42,7 @@ def generate_launch_description():
             "config_file": "costmap_configs/GP_base.yaml",
             "cost_topic": "traversability_cost", 
             "odom_topic": "/lester/integrated_to_init",
-            "gridmap_topic": "dino_gridmap",
+            "gridmap_topic": "vfm_voxels/dino_gridmap",
             "costmap_topic": "map/planning/local",  # "/warty/vfm_voxels/shortrange_costmap",
             "speedmap_topic": "shortrange_speedmap",
             "cvar_speedmap_topic": "hdif_speedmap_cvar",
