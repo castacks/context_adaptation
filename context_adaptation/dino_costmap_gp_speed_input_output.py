@@ -656,7 +656,7 @@ class Context_Clusterer(Node):
             )
         )
 
-        costmap_layer_msg.data = (costmap*3)[::-1, ::-1].flatten().tolist()
+        costmap_layer_msg.data = (costmap*1)[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(costmap_layer_msg)
 
         #add dummy elevation
@@ -757,7 +757,7 @@ class Context_Clusterer(Node):
 
         # self.get_logger().info(f"COSTMAP TYPE and SHAPE = {type(costmap), costmap.dtype, costmap.shape}");
         # self.get_logger().info(f"COSTMAP MIN/MAX = {costmap.min(), costmap.max()}");
-        costmap_layer_msg.data = (costmap * 255)[::-1, ::-1].flatten().tolist()
+        costmap_layer_msg.data = (costmap * 255 / 0.9)[::-1, ::-1].flatten().tolist()
         costmap_msg.data.append(costmap_layer_msg)
 
         #add dummy elevation
