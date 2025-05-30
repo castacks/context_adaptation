@@ -186,6 +186,7 @@ catkin_install_python(PROGRAMS
 
    #src/context_adaptation_common/anyloc_utils.py
    #src/context_adaptation_common/links_cluster.py
+   src/context_adaptation_common/gridmap.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

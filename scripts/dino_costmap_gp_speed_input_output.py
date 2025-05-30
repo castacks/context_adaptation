@@ -33,7 +33,7 @@ import torch
 import torch.nn.functional as F
 
 from matplotlib.animation import FuncAnimation, ArtistAnimation
-from rosbag_to_dataset.dtypes.gridmap import GridMapConvert
+from context_adaptation_common.gridmap import GridMapConvert
 
 import gpytorch
 gpytorch.settings.debug(False)
