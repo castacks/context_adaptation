@@ -12,11 +12,11 @@ BEHAVIOR:
   # uncertainty_threshold: .88
   # residual_max: 27.0
   # uncertainty_threshold: .96
-  residual_max: 26.0
-  uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
+  # residual_max: 26.0 #og
+  residual_max: 20.0 #loftup
+  # uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
+  uncertainty_threshold: .75
   buffer_update_freq: 2
-  cost_lengthscale: 3.0
-  speed_lengthscale: 1.5
   # speed_init: 3.0
   max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
   max_velocity: 6
@@ -29,5 +29,17 @@ BEHAVIOR:
   # adaptation_factor: .001
   # speed_cap: 5.5
   # weighted_avg_speed: False
+  trav_model:
+    model_type: GP
+    # model_type: MLPr
+    lengthscale: 3.0
+    update_thresh: 10
+    train_kernel: True
+  speed_model:
+    model_type: GP
+    lengthscale: 1.5
+    update_thresh: 10
+    train_kernel: False
+
 MISC:
   update_freq: 5

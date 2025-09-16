@@ -3,9 +3,6 @@ cost_publisher:
         # ros
         use_sim_time: On 
 
-        # node specific
-        config_file: "costmap_configs/GP_base.yaml"
-
         cost_stats_dir: "cost_configs/wanda_cost_statistics.yaml"
 
         cost_topic: "/traversability_cost"

@@ -20,10 +20,11 @@ import torch.nn.functional as F
 
 from matplotlib.animation import FuncAnimation, ArtistAnimation
 from context_adaptation.common.gridmap_converter import GridMapConvert
+from context_adaptation.models.ExactGP import GPTraversability
+from context_adaptation.models.TravMLP import MLPTravRegress
 
-import gpytorch
-gpytorch.settings.debug(False)
 
+MODEL_MAP = {'GP': GPTraversability, 'MLPr': MLPTravRegress}
 import matplotlib
 try :
     CMAP = matplotlib.cm.get_cmap('magma')
@@ -37,20 +38,6 @@ except:
 #split into collect/infer
 #inference class
 #time-based stuff
-
-class ExactGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, likelihood,lengthscale):
-        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=train_x.shape[-1]))
-        # self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-        self.covar_module.base_kernel.lengthscale = lengthscale
-
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 class SalonCostmap():
     def __init__(self):
@@ -87,9 +74,9 @@ class SalonCostmap():
         self.residual_max = config['BEHAVIOR']['residual_max']
         self.uc_thresh = config['BEHAVIOR']['uncertainty_threshold']
 
-        self.cost_lengthscale = config['BEHAVIOR']['cost_lengthscale']
-        self.speed_lengthscale = config['BEHAVIOR']['speed_lengthscale']
-        self.train_kernel = config['BEHAVIOR']['train_kernel']
+        # self.cost_lengthscale = config['BEHAVIOR']['cost_lengthscale']
+        # self.speed_lengthscale = config['BEHAVIOR']['speed_lengthscale']
+        # self.train_kernel = config['BEHAVIOR']['train_kernel']
 
         buffer_len = config['BEHAVIOR']['buffer_size']
         self.buffer_update_freq = config['BEHAVIOR']['buffer_update_freq']
@@ -99,8 +86,6 @@ class SalonCostmap():
         self.toi = np.zeros((buffer_len))
         self.buffer_idx = 0
         self.buffer_full = False
-        self.in_std = 0.0
-        self.in_mean = 0.0
 
         self.cost_offset = .0
         self.velocity = 0.0
@@ -116,8 +101,14 @@ class SalonCostmap():
         avoid_data[:,-1] = 1.0
         for i in range(num_insert):
             avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
-           21.984331, 24.273615]).cuda() / self.residual_max
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
+           14.259332, 15.66645 ]).cuda() / self.residual_max
+
+        # [11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
+        #    14.259332, 15.66645 ]
+
+    # [19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
+        #    21.984331, 24.273615]
 
         self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
         self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
@@ -126,19 +117,30 @@ class SalonCostmap():
         self.num_insert = num_insert
         self.buffer_idx += self.num_insert
 
-        self.gp = None
-        self.likelihood = None
-        self.gp_params = None
+        train_in_buffer = self.train_in_buffer[:self.buffer_idx]
+        #TODO parameterize
+        self.trav_model_indices = [0,1,2,3,4,5,6,7,8]
+        self.speed_model_indices = [0,1,2,3,4,5,6,7,9]
 
-        self.gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input'), weights_only=True)
+        trav_params_dir = os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input')
+        speed_params_dir = os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new')
 
-        self.speed_gp = None
-        self.speed_likelihood = None
-        self.speed_gp_params = None
-        self.speed_likelihood = None
-        self.speed_gp_params = torch.load(os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new'), weights_only=True)
+        # trav_params_dir = None
+        # speed_params_dir = None
 
-        self.speed_gp_indices = [0,1,2,3,4,5,6,7,9]
+        trav_config = config['BEHAVIOR']['trav_model']
+        speed_config = config['BEHAVIOR']['speed_model']
+
+
+        self.trav_model = MODEL_MAP[trav_config['model_type']](train_in_buffer[:,self.trav_model_indices], 
+                                           train_in_buffer[:,-1],
+                                           trav_config,
+                                           params_dir = trav_params_dir)
+        self.speed_model = MODEL_MAP[speed_config['model_type']](train_in_buffer[:,self.speed_model_indices], 
+                                           train_in_buffer[:,-2],
+                                           speed_config,
+                                           params_dir = speed_params_dir)
+        
 
         self.max_roughness = config['BEHAVIOR']['max_cost']
         self.max_velocity = config['BEHAVIOR']['max_velocity']
@@ -225,12 +227,47 @@ class SalonCostmap():
 
         return tire_points
 
+    def prep_inputs(self, feats):
+        vel_append = torch.ones(feats.shape[0],1).cuda() * self.velocity
+        rough_append = torch.ones(feats.shape[0],1) * self.max_roughness
+        input = torch.hstack((feats,vel_append.cuda(), rough_append.cuda())).cuda()
+        # input = (input - self.in_mean)/self.in_std
 
-    def run(self, featmap, metadata, odom, vel, cost):
+        return input
+
+    def predict_img(self, feat_img):
+        min_result = feat_img.min(axis=2)
+        unc_img = min_result.values
+        unc_img /= self.residual_max
+        unc_img[unc_img < self.uc_thresh] = 0
+
+        # cost_img = torch.zeros((feat_img.shape[0],feat_img.shape[1]))
+
+        feat_flat = feat_img.reshape(-1,self.VLAD_CLUSTS)/self.residual_max
+        feat_flat = self.prep_inputs(feat_flat)
+
+        img_pred, cost_var = self.trav_model.forward(feat_flat[:,:-1], self.costmap_cvar)
+
+        # observed_pred = self.likelihood(self.gp(feat_flat[:,:-1]))
+        # img_pred = observed_pred.mean
+        # img_var = observed_pred.variance
+        # img_pred = (img_pred * self.in_std[-1]) + self.in_mean[-1]
+        cost_img = img_pred.reshape(feat_img.shape[0],feat_img.shape[1])
+
+        cost_img = torch.clip(cost_img, 0,1)
+        cost_img *= .8
+        ids = torch.where(unc_img != 0)
+        cost_img[ids] = unc_img[ids]
+
+        return cost_img
+
+    def run(self, featmap, metadata, odom, vel, cost, feat_img = None):
         now = time.perf_counter()
         if self.hz_counter == 5000000:
             self.hz_counter = 0
         self.hz_counter += 1
+
+        res_out = {'cost_image': None}
 
         self.handle_odom(odom, vel)
         self.handle_cost(cost)
@@ -242,18 +279,12 @@ class SalonCostmap():
         unc_map = min_result.values
 
         unc_map /= self.residual_max
-
         unc_map[unc_map < self.uc_thresh] = 0
-
-        # e_kernel = np.ones((2, 2), np.float32)
-        # unc_map = cv2.erode(unc_map, e_kernel, iterations=1)
-        # unc_map = cv2.dilate(unc_map, e_kernel, iterations=1)
 
         e_kernel_size = 2
         eroded = -F.max_pool2d(-unc_map.view(1,1,*unc_map.shape), kernel_size=e_kernel_size, stride=1, padding=0)
         dilated = F.max_pool2d(eroded, kernel_size=e_kernel_size, stride=1, padding=0)
         unc_map = dilated[0,0]
-
 
         P = metadata.origin.cpu().numpy()
         res = metadata.resolution.cpu().numpy()
@@ -271,7 +302,9 @@ class SalonCostmap():
             # return None
             costmap = torch.zeros(gridmap_size)
             speedmap = torch.zeros(gridmap_size)
-            return (costmap, speedmap)
+            res_out['costmap'] = costmap
+            res_out['speedmap'] = speedmap
+            return res_out
 
         # self.get_logger().info("++++++++++++++++++ L349 after np.any +++++++++++++ ");
 
@@ -312,75 +345,13 @@ class SalonCostmap():
         costmap = torch.zeros(gridmap_len).to(og_device)
         speedmap = torch.zeros(gridmap_len).to(og_device) + 4.5
 
-        if self.hz_counter % 10 == 0 or self.gp is None:
-            print('****************************************************')
-            form_now = time.perf_counter()
-            self.likelihood = gpytorch.likelihoods.GaussianLikelihood().cuda()
-            self.speed_likelihood = gpytorch.likelihoods.GaussianLikelihood().cuda()
-            if not self.buffer_full:
+        if not self.buffer_full:
                 train_in_buffer = self.train_in_buffer[:self.buffer_idx]
-                train_label_buffer = self.train_label_buffer[:self.buffer_idx,0]
-                train_buffer_classes = self.train_buffer_classes[:self.buffer_idx]
-            else:
-                train_in_buffer = self.train_in_buffer
-                train_label_buffer = self.train_label_buffer[:,0]
-                train_buffer_classes = self.train_buffer_classes
+        else:
+            train_in_buffer = self.train_in_buffer
 
-            self.in_mean = torch.mean(train_in_buffer, dim = 0)
-            self.in_std = torch.std(train_in_buffer, dim = 0)
-            train_in_buffer = (train_in_buffer - self.in_mean)/self.in_std
-            self.gp = ExactGPModel(train_in_buffer[:,:-1], train_in_buffer[:,-1], self.likelihood, self.cost_lengthscale).cuda()
-            self.speed_gp = ExactGPModel(train_in_buffer[:,self.speed_gp_indices], train_in_buffer[:,-2], self.speed_likelihood, self.speed_lengthscale).cuda()
-            if self.gp_params is not None:
-                self.gp.load_state_dict(self.gp_params)
-            if self.speed_gp_params is not None:
-                self.speed_gp.load_state_dict(self.speed_gp_params)
-
-        elif self.train_kernel:
-            if not self.buffer_full:
-                train_in_buffer = self.train_in_buffer[:self.buffer_idx]
-                train_label_buffer = self.train_label_buffer[:self.buffer_idx,0]
-            else:
-                train_in_buffer = self.train_in_buffer
-                train_label_buffer = self.train_label_buffer[:,0]
-
-            if train_in_buffer.shape[0] < 13: #self.buffer_idx > 10:
-                return
-
-            # optimizer = torch.optim.SGD(self.gp.parameters(), lr=0.01)
-            # with gpytorch.settings.debug(False):
-            #     self.gp.train()
-            #     self.likelihood.train()
-            #     mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.gp)
-            #     optimizer.zero_grad()
-            #     output = self.gp(train_in_buffer[:,:-1])
-            #     # print(output)
-            #     loss = -mll(output, train_in_buffer[:,-1])
-            #     print("LOSS - ", loss.item())
-            #     # print("PARAMS ", self.gp.covar_module)
-            #     if not torch.isnan(loss):
-            #         loss.backward()
-            #         optimizer.step()
-            #
-            #     self.gp_params = self.gp.state_dict()
-
-            optimizer = torch.optim.SGD(self.speed_gp.parameters(), lr=0.01)
-            with gpytorch.settings.debug(False):
-                self.speed_gp.train()
-                # self.likelihood.train()
-                self.speed_likelihood.train()
-                mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.speed_likelihood, self.speed_gp)
-                optimizer.zero_grad()
-                output = self.speed_gp(train_in_buffer[:,self.speed_gp_indices])
-                # print(output)
-                loss = -mll(output, train_in_buffer[:,-2])
-                print("LOSS - ", loss.item())
-                # print("PARAMS ", self.gp.covar_module)
-                if not torch.isnan(loss):
-                    loss.backward()
-                    optimizer.step()
-
-                self.speed_gp_params = self.speed_gp.state_dict()
+        self.trav_model.train(train_in_buffer[:,:-1], train_in_buffer[:,-1])
+        self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
 
         with torch.no_grad():
             if self.buffer_idx < 5 + self.num_insert: #we need at least a couple samples apart from single label
@@ -389,44 +360,16 @@ class SalonCostmap():
                 costmap_var = torch.zeros_like(costmap)
                 speedmap_var = torch.zeros_like(speedmap)
             else:
-                self.gp.eval()
-                self.speed_gp.eval()
-                self.likelihood.eval()
-                self.speed_likelihood.eval()
                 input = input.permute(1,2,0).view(-1,self.VLAD_CLUSTS)
 
                 zero_mask_f = zero_mask.flatten()
                 keep_mask = ~zero_mask_f
                 input = input[keep_mask]
 
-                vel_append = torch.ones(input.shape[0],1).cuda() * self.velocity
-                rough_append = torch.ones(input.shape[0],1) * self.max_roughness
-                input = torch.hstack((input,vel_append.cuda(), rough_append.cuda())).cuda()
-                input = (input - self.in_mean)/self.in_std
+                input = self.prep_inputs(input)
 
-                observed_pred = self.likelihood(self.gp(input[:,:-1]))
-                cost_pred = observed_pred.mean
-                cost_var = observed_pred.variance
-
-                observed_pred = self.speed_likelihood(self.speed_gp(input[:,self.speed_gp_indices]))
-                speed_pred = observed_pred.mean
-
-                speed_var = observed_pred.variance
-
-                # print("CVAR - ", self.cvar_alpha)
-
-                phi = stats.norm.pdf(stats.norm.ppf(self.cvar_alpha))
-                cvar = speed_pred + (speed_var * phi)/(1.0-self.cvar_alpha)
-                speed_pred = cvar
-                speed_pred = (speed_pred * self.in_std[-2]) + self.in_mean[-2]
-
-
-                cmap_cvar = self.costmap_cvar
-                phi = stats.norm.pdf(stats.norm.ppf(cmap_cvar))
-                cvar = cost_pred + (cost_var * phi)/(1.0-cmap_cvar)
-                cost_pred = cvar
-
-                cost_pred = (cost_pred * self.in_std[-1]) + self.in_mean[-1]
+                cost_pred, cost_var = self.trav_model.forward(input[:,:-1], self.costmap_cvar)
+                speed_pred, speed_var = self.speed_model.forward(input[:,self.speed_model_indices], self.cvar_alpha)
 
                 costmap[keep_mask] = cost_pred
                 speedmap[keep_mask] = speed_pred
@@ -450,7 +393,9 @@ class SalonCostmap():
                 if (torch.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) > .4) and speedmap[xloc[0],yloc[0]] < 2.8:
                     self.cvar_alpha += .01
 
-
+                if feat_img is not None:
+                    cost_img = self.predict_img(feat_img)
+                    res_out['cost_image'] = cost_img
 
             if self.buffer_idx < 30 + self.num_insert: #let's give the speedmap a bit more time
                 speedmap = torch.zeros(gridmap_size) + 4.5
@@ -474,121 +419,11 @@ class SalonCostmap():
         speedmap = torch.clip(speedmap,0,self.max_velocity)
         # costmap = costmap.cpu()
         # speedmap = speedmap.cpu()
-        print(costmap.shape, speedmap.shape)
-        return (costmap, speedmap)
+        # print(costmap.shape, speedmap.shape)
 
-        # # costmap_msg = self.costmap_to_gridmap(costmap, info, variance = var_viz)
-        # costmap_msg = self.costmap_to_gridmap(costmap, info, msg_header)
-        # self.costmap_pub.publish(costmap_msg)
+        
 
-
-        # speedmap_msg = self.costmap_to_gridmap(speedmap, info, msg_header, costmap_layer = 'speedmap', norm_factor = self.max_velocity)
-        # self.speedmap_pub.publish(speedmap_msg)
-
-
-        # cvar_msg = Float32()
-        # cvar_msg.data = self.cvar_alpha
-        # self.cvar_pub.publish(cvar_msg)
-
-        # # print(time.perf_counter() - now, 'total time', self.buffer_idx, 'buffer_idx')
-        # self.get_logger().info("Published costmap and speedmap")
-
-
-    def costmap_to_gridmap(self, costmap, info, msg_header, costmap_layer='costmap', variance = None, norm_factor = None):
-        """
-        convert costmap into gridmap msg
-
-        Args:
-            costmap: The data to load into the gridmap
-            msg: The input msg to extrach metadata from
-            costmap: The name of the layer to get costmap from
-        """
-        costmap_msg = GridMap()
-        costmap_msg.info = info
-        costmap_msg.header = msg_header
-        # print("FRAME _ ", costmap_msg.info.header.frame_id)
-        costmap_msg.layers = [costmap_layer]
-
-        costmap_layer_msg = Float32MultiArray()
-        costmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="column_index",
-                size=costmap.shape[0],
-                stride=costmap.shape[0]
-            )
-        )
-        costmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="row_index",
-                size=costmap.shape[0],
-                stride=costmap.shape[0] * costmap.shape[1]
-            )
-        )
-
-        costmap_layer_msg.data = costmap[::-1, ::-1].flatten().tolist()
-        costmap_msg.data.append(costmap_layer_msg)
-
-        #add dummy elevation
-        costmap_msg.layers.append('elevation')
-        # layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 #+ costmap
-
-        if variance is not None:
-            layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 - variance*5
-        else:
-            layer_data = np.zeros_like(costmap) + self.odom_msg.pose.pose.position.z - 1.73 #+ costmap
-        # print(variance.max(), variance.min())
-        gridmap_layer_msg = Float32MultiArray()
-        gridmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="column_index",
-                size=layer_data.shape[0],
-                stride=layer_data.shape[0]
-            )
-        )
-        gridmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="row_index",
-                size=layer_data.shape[0],
-                stride=layer_data.shape[0] * layer_data.shape[1]
-            )
-        )
-
-        gridmap_layer_msg.data = layer_data[::-1, ::-1].flatten().tolist()
-        costmap_msg.data.append(gridmap_layer_msg)
-
-        # vcostmap = np.clip(costmap,0,1)
-        if norm_factor is None:
-            # vcostmap = np.clip(costmap*2.,0,.6)/.6
-            vcostmap = np.clip(costmap*2.,0,1)
-        else:
-            vcostmap = np.clip(costmap,0,norm_factor)/norm_factor
-        # vcostmap = costmap
-
-        if costmap_layer == 'costmap':
-            gridmap_cs = (CMAP(vcostmap) * 255).astype(np.int32)
-        else:
-            gridmap_cs = (SMAP(vcostmap) * 255).astype(np.int32)
-        gridmap_color = gridmap_cs[..., 0] * (2**16) + gridmap_cs[..., 1] * (2**8) + gridmap_cs[..., 2]
-        gridmap_color = gridmap_color.view(dtype=np.float32)
-
-        costmap_msg.layers.append('rgb_viz')
-        gridmap_layer_msg = Float32MultiArray()
-        gridmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="column_index",
-                size=layer_data.shape[0],
-                stride=layer_data.shape[0]
-            )
-        )
-        gridmap_layer_msg.layout.dim.append(
-            MultiArrayDimension(
-                label="row_index",
-                size=layer_data.shape[0],
-                stride=layer_data.shape[0] * layer_data.shape[1]
-            )
-        )
-
-        gridmap_layer_msg.data = gridmap_color[::-1, ::-1].flatten().tolist()
-        costmap_msg.data.append(gridmap_layer_msg)
-
-        return costmap_msg
+        res_out['costmap'] = costmap
+        res_out['speedmap'] = speedmap
+        
+        return res_out
