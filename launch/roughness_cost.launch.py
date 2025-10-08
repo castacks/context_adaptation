@@ -6,6 +6,7 @@ from launch import LaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import IncludeLaunchDescription
 from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
     # context_adaptation
@@ -15,7 +16,7 @@ def generate_launch_description():
     cost_publisher = Node(
         package='context_adaptation',
         executable='cost_publisher',
-        parameters=[param_file],
+        parameters=[param_file, {'use_sim_time': LaunchConfiguration("use_sim_time")}],
         output='screen'
     )
 
