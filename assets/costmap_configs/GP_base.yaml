@@ -13,15 +13,15 @@ BEHAVIOR:
   # residual_max: 27.0
   # uncertainty_threshold: .96
   # residual_max: 26.0 #og
-  residual_max: 20.0 #loftup
+  residual_max: 29.0 #loftup
+  # residual_max: 21.0 #jafar dinov2s
   # uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
-  uncertainty_threshold: .75
+  uncertainty_threshold: .7
   buffer_update_freq: 2
   # speed_init: 3.0
   max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
   max_velocity: 6
   velocity_margin: 1.0 #high on bag playback since we don't control speed
-  train_kernel: False
   costmap_cvar: .03
   unknown_cost: .1
   unknown_speed: 5
@@ -34,7 +34,7 @@ BEHAVIOR:
     # model_type: MLPr
     lengthscale: 3.0
     update_thresh: 10
-    train_kernel: True
+    train_kernel: False
   speed_model:
     model_type: GP
     lengthscale: 1.5
