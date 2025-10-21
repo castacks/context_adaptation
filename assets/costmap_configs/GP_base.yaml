@@ -15,7 +15,7 @@ BEHAVIOR:
   # residual_max: 26.0 #og
   residual_max: 20.0 #loftup
   # uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
-  uncertainty_threshold: .75
+  uncertainty_threshold: 5 #.75
   buffer_update_freq: 2
   # speed_init: 3.0
   max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap

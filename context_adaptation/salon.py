@@ -359,6 +359,9 @@ class SalonCostmap():
                 speedmap = torch.zeros(gridmap_size) + 4.5
                 costmap_var = torch.zeros_like(costmap)
                 speedmap_var = torch.zeros_like(speedmap)
+                if feat_img is not None:
+                    cost_img = torch.zeros_like(feat_img[:,:,0])
+                    res_out['cost_image'] = cost_img
             else:
                 input = input.permute(1,2,0).view(-1,self.VLAD_CLUSTS)
 
