@@ -5,7 +5,7 @@ ROBOT:
   back_x: -2.41 #-0.91-(1.5)
   width: .72
 VLAD:
-  n_clusters: 8
+  n_clusters: 16
 BEHAVIOR:
   buffer_size: 400 #reduce if running slow, try to keep above 1-200
   # residual_max: 36.0
@@ -13,10 +13,10 @@ BEHAVIOR:
   # residual_max: 27.0
   # uncertainty_threshold: .96
   # residual_max: 26.0 #og
-  residual_max: 29.0 #loftup
-  # residual_max: 21.0 #jafar dinov2s
+  # residual_max: 29.0 #loftup
+  residual_max: 21.0 #jafar dinov2s
   # uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
-  uncertainty_threshold: .7
+  uncertainty_threshold: .8
   buffer_update_freq: 2
   # speed_init: 3.0
   max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap

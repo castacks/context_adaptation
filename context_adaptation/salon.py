@@ -92,56 +92,58 @@ class SalonCostmap():
         self.fake_velocity = 0.0
 
         self.num_insert = 0
-
-        avoid_class = 3 #looks like 3 or 5|6
-        num_insert = 8
-        spread = 1.2
+        #probably would be smarter to use the actual update buffer method oops
+        avoid_class = 7 #looks like 3 or 5|6 #TODO determine auto
+        num_insert = 16
+        spread = .6
         avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
         avoid_classes = np.zeros((num_insert)) + avoid_class
+        # avoid_labels = torch.ones((num_insert,1)).cuda()
         avoid_data[:,-1] = 1.0
         for i in range(num_insert):
             avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
-           14.259332, 15.66645 ]).cuda() / self.residual_max
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [12.98802 , 13.122304, 17.513393, 18.018774, 12.788868, 11.182386,
+       15.822601,  9.511901, 10.805964, 16.773243, 12.275872, 13.463533,
+       16.428297, 14.613811, 16.209469, 14.325368]).cuda() / self.residual_max
 
         self.num_insert += num_insert
         self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
         self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
-        #probably would be smarter to use the actual update buffer method oops
-    #     avoid_class = 7 #looks like 3 or 5|6 #TODO determine auto
-    #     num_insert = 16
-    #     spread = .6
-    #     avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-    #     avoid_classes = np.zeros((num_insert)) + avoid_class
-    #     # avoid_labels = torch.ones((num_insert,1)).cuda()
-    #     avoid_data[:,-1] = 1.0
-    #     for i in range(num_insert):
-    #         avoid_data[i,-2] = i*spread
-    #         avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [12.98802 , 13.122304, 17.513393, 18.018774, 12.788868, 11.182386,
-    #    15.822601,  9.511901, 10.805964, 16.773243, 12.275872, 13.463533,
-    #    16.428297, 14.613811, 16.209469, 14.325368]).cuda() / self.residual_max
+        avoid_class = 3 #looks like 3 or 5|6 #TODO determine auto
+        num_insert = 16
+        spread = .6
+        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+        avoid_classes = np.zeros((num_insert)) + avoid_class
+        # avoid_labels = torch.ones((num_insert,1)).cuda()
+        avoid_data[:,-1] = 0.0
+        for i in range(num_insert):
+            avoid_data[i,-2] = i*spread
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [15.888259, 18.382221, 11.105324,  9.551509, 18.27044 , 17.904112,
+       10.477119, 18.001842, 16.692816, 13.731105, 14.897635, 18.558062,
+       13.085492, 17.76509 , 12.009064, 18.03747 ]).cuda() / self.residual_max
 
-    #     self.num_insert += num_insert
-    #     self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-    #     self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+        self.num_insert += num_insert
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
-    #     avoid_class = 3 #looks like 3 or 5|6 #TODO determine auto
-    #     num_insert = 16
-    #     spread = .6
-    #     avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-    #     avoid_classes = np.zeros((num_insert)) + avoid_class
-    #     # avoid_labels = torch.ones((num_insert,1)).cuda()
-    #     avoid_data[:,-1] = 0.0
-    #     for i in range(num_insert):
-    #         avoid_data[i,-2] = i*spread
-    #         avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [15.888259, 18.382221, 11.105324,  9.551509, 18.27044 , 17.904112,
-    #    10.477119, 18.001842, 16.692816, 13.731105, 14.897635, 18.558062,
-    #    13.085492, 17.76509 , 12.009064, 18.03747 ]).cuda() / self.residual_max
+        avoid_class = 7 #looks like 3 or 5|6 #TODO determine auto
+        num_insert = 16
+        spread = .6
+        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+        avoid_classes = np.zeros((num_insert)) + avoid_class
+        # avoid_labels = torch.ones((num_insert,1)).cuda()
+        avoid_data[:,-1] = 1.0
+        for i in range(num_insert):
+            avoid_data[i,-2] = i*spread
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [16.856941, 17.905632, 18.437017, 18.805809, 17.495394, 16.63396 ,
+       17.540989, 14.362373, 17.005014, 18.42312 , 17.486588, 16.716381,
+       17.6832  , 17.106825, 18.411427, 16.367277]).cuda() / self.residual_max
 
-    #     self.num_insert += num_insert
-    #     self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-    #     self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+        self.num_insert += num_insert
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+
 
         # [11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
         #    14.259332, 15.66645 ]
@@ -164,6 +166,11 @@ class SalonCostmap():
     # [15.888259, 18.382221, 11.105324,  9.551509, 18.27044 , 17.904112,
     #    10.477119, 18.001842, 16.692816, 13.731105, 14.897635, 18.558062,
     #    13.085492, 17.76509 , 12.009064, 18.03747 ]
+
+    #jafar dinos 16 - winter tree
+    # [16.856941, 17.905632, 18.437017, 18.805809, 17.495394, 16.63396 ,
+    #    17.540989, 14.362373, 17.005014, 18.42312 , 17.486588, 16.716381,
+    #    17.6832  , 17.106825, 18.411427, 16.367277]
 
         self.buffer_idx += self.num_insert
 
@@ -442,12 +449,12 @@ class SalonCostmap():
         self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
 
         with torch.no_grad():
-            # if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
-            if self.buffer_idx < 5 + self.num_insert: #we need at least a couple samples apart from single label
+            if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
                 costmap = torch.zeros(gridmap_size)
                 speedmap = torch.zeros(gridmap_size) + 4.5
                 costmap_var = torch.zeros_like(costmap)
                 speedmap_var = torch.zeros_like(speedmap)
+
                 if feat_img is not None:
                     cost_img = torch.zeros(feat_img.shape[:2]).float()
                     res_out['cost_image'] = cost_img
