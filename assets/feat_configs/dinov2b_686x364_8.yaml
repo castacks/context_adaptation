@@ -1,0 +1,12 @@
+---
+n_clusters: 8
+residual_max: 26.0 #jafar dinov2s
+uncertainty_threshold: .85
+num_insert: 8
+spread: 1.2
+labels:
+  -
+    type: trees
+    cost: 1.0
+    feat: [19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
+           21.984331, 24.273615]

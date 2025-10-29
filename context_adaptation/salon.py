@@ -23,6 +23,7 @@ from context_adaptation.common.gridmap_converter import GridMapConvert
 from context_adaptation.models.ExactGP import GPTraversability
 from context_adaptation.models.TravMLP import MLPTravRegress
 
+from tartandriver_utils.os_utils import load_yaml
 
 MODEL_MAP = {'GP': GPTraversability, 'MLPr': MLPTravRegress}
 import matplotlib
@@ -47,8 +48,7 @@ class SalonCostmap():
         
         self.assets_dir = '/home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets'
 
-        with open(os.path.join(self.assets_dir, self.config_file), 'r') as file :
-            config = yaml.load(file, Loader=yaml.FullLoader)
+        config = load_yaml(os.path.join(self.assets_dir, self.config_file))
 
         self.hz_counter = 0
 
@@ -68,11 +68,11 @@ class SalonCostmap():
 
         self.tire_transforms = [transform_front_left, transform_front_right, transform_rear_left, transform_rear_right]
 
-        #TODO Grab this dynamically as well
-        self.VLAD_CLUSTS = config['VLAD']['n_clusters']
+        feats_conf = config['BEHAVIOR']['feats']
+        self.VLAD_CLUSTS = feats_conf['n_clusters']
 
-        self.residual_max = config['BEHAVIOR']['residual_max']
-        self.uc_thresh = config['BEHAVIOR']['uncertainty_threshold']
+        self.residual_max = feats_conf['residual_max']
+        self.uc_thresh = feats_conf['uncertainty_threshold']
 
         # self.cost_lengthscale = config['BEHAVIOR']['cost_lengthscale']
         # self.speed_lengthscale = config['BEHAVIOR']['speed_lengthscale']
@@ -92,89 +92,15 @@ class SalonCostmap():
         self.fake_velocity = 0.0
 
         self.num_insert = 0
-        #probably would be smarter to use the actual update buffer method oops
-        avoid_class = 7 #looks like 3 or 5|6 #TODO determine auto
-        num_insert = 16
-        spread = .6
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        # avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 1.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [12.98802 , 13.122304, 17.513393, 18.018774, 12.788868, 11.182386,
-       15.822601,  9.511901, 10.805964, 16.773243, 12.275872, 13.463533,
-       16.428297, 14.613811, 16.209469, 14.325368]).cuda() / self.residual_max
-
-        self.num_insert += num_insert
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-
-        avoid_class = 3 #looks like 3 or 5|6 #TODO determine auto
-        num_insert = 16
-        spread = .6
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        # avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 0.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [15.888259, 18.382221, 11.105324,  9.551509, 18.27044 , 17.904112,
-       10.477119, 18.001842, 16.692816, 13.731105, 14.897635, 18.558062,
-       13.085492, 17.76509 , 12.009064, 18.03747 ]).cuda() / self.residual_max
-
-        self.num_insert += num_insert
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-
-        avoid_class = 7 #looks like 3 or 5|6 #TODO determine auto
-        num_insert = 16
-        spread = .6
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        # avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 1.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor( [16.856941, 17.905632, 18.437017, 18.805809, 17.495394, 16.63396 ,
-       17.540989, 14.362373, 17.005014, 18.42312 , 17.486588, 16.716381,
-       17.6832  , 17.106825, 18.411427, 16.367277]).cuda() / self.residual_max
-
-        self.num_insert += num_insert
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-
-
-        # [11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
-        #    14.259332, 15.66645 ]
-
-    # [19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
-        #    21.984331, 24.273615]
-
-    #jafar dinob 16 - trees
-
-    #     [24.317305, 25.035896, 20.78442 , 16.37971 , 19.124245, 16.844648,
-    #    24.116472, 23.08772 , 25.927488, 24.897026, 22.635292, 24.83927 ,
-    #    15.700704, 16.08722 , 26.050648, 26.512663]
-
-    #jafar dinos 16 - trees
-    # [12.98802 , 13.122304, 17.513393, 18.018774, 12.788868, 11.182386,
-    #    15.822601,  9.511901, 10.805964, 16.773243, 12.275872, 13.463533,
-    #    16.428297, 14.613811, 16.209469, 14.325368]
-
-    #jafar dinos 16 - trail
-    # [15.888259, 18.382221, 11.105324,  9.551509, 18.27044 , 17.904112,
-    #    10.477119, 18.001842, 16.692816, 13.731105, 14.897635, 18.558062,
-    #    13.085492, 17.76509 , 12.009064, 18.03747 ]
-
-    #jafar dinos 16 - winter tree
-    # [16.856941, 17.905632, 18.437017, 18.805809, 17.495394, 16.63396 ,
-    #    17.540989, 14.362373, 17.005014, 18.42312 , 17.486588, 16.716381,
-    #    17.6832  , 17.106825, 18.411427, 16.367277]
+        for label in feats_conf['labels']:
+            feat = torch.Tensor(label['feat']).cuda()/self.residual_max
+            cost = label['cost']
+            self.insert_label(feat, cost, feats_conf['num_insert'], feats_conf['spread'])
 
         self.buffer_idx += self.num_insert
 
         train_in_buffer = self.train_in_buffer[:self.buffer_idx]
+        
         #TODO parameterize and account for geom features
         # self.trav_model_indices = [0,1,2,3,4,5,6,7,8]
         # self.speed_model_indices = [0,1,2,3,4,5,6,7,9]
@@ -184,14 +110,20 @@ class SalonCostmap():
         self.trav_model_indices = [idx for idx in base_indices if idx != self.rough_idx]
         self.speed_model_indices = [idx for idx in base_indices if idx != self.speed_idx]
 
-        # trav_params_dir = os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input')
-        # speed_params_dir = os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new')
-
-        trav_params_dir = None
-        speed_params_dir = None
+        self.check_ready()
 
         trav_config = config['BEHAVIOR']['trav_model']
         speed_config = config['BEHAVIOR']['speed_model']
+
+        if 'weights' in trav_config:
+            trav_params_dir = os.path.join(self.assets_dir, 'gp_params', trav_config['weights'])
+        else:
+            trav_params_dir = None
+
+        if 'weights' in speed_config:
+            speed_params_dir = os.path.join(self.assets_dir, 'gp_params', speed_config['weights'])
+        else:
+            speed_params_dir = None
 
 
         self.trav_model = MODEL_MAP[trav_config['model_type']](train_in_buffer[:,self.trav_model_indices], 
@@ -226,7 +158,6 @@ class SalonCostmap():
 
 
     def handle_cost(self, cost):
-        # self.get_logger().info("received cost data")
         self.cost = cost
         self.cost -= self.cost_offset
         self.rough_history = self.rough_history + (cost - self.rough_history) * .2
@@ -255,6 +186,18 @@ class SalonCostmap():
 
                 self.grid_map_cvt.channels = self.channels
 
+    def insert_label(self, feat, cost, num_insert, spread):
+        avoid_class = feat.argmin()
+        avoid_data = torch.zeros(num_insert, self.VLAD_CLUSTS + 2).cuda()
+        avoid_classes = np.zeros((num_insert)) + avoid_class.item()
+        avoid_data[:,-1] = cost
+        for i in range(num_insert):
+            avoid_data[i,-2] = i*spread
+            avoid_data[i,:self.VLAD_CLUSTS] = feat
+
+        self.num_insert += num_insert
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
     def update_train_buffer(self,input,label,class_id):
         self.train_in_buffer[self.buffer_idx] = input
@@ -266,12 +209,20 @@ class SalonCostmap():
             self.buffer_full = True
             # self.buffer_idx = 0
 
+        if not self.is_ready:
+            self.check_ready()
+
+    def check_ready(self):
+        self.is_ready = (len(self.train_in_buffer[:self.buffer_idx,self.rough_idx].unique() > 1) &
+                      len(self.train_in_buffer[:self.buffer_idx,self.speed_idx].unique() > 1))
 
     def insert_train_buffer(self,input,label, class_id, idx):
         self.train_in_buffer[idx] = input
         # self.train_label_buffer[idx] = label
         self.train_buffer_classes[idx] = class_id
 
+        if not self.is_ready:
+            self.check_ready()
 
     def insert_train_buffer_FIFO(self,input,label, class_id):
         idx = np.argmin(self.toi)
@@ -449,7 +400,8 @@ class SalonCostmap():
         self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
 
         with torch.no_grad():
-            if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
+            # if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
+            if not self.is_ready:
                 costmap = torch.zeros(gridmap_size)
                 speedmap = torch.zeros(gridmap_size) + 4.5
                 costmap_var = torch.zeros_like(costmap)
