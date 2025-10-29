@@ -1,0 +1,36 @@
+---
+ROBOT:
+  frame_height: .4
+  front_x: .265 #bc it's facing backwards lol
+  back_x: -.265 #-0.91-(1.5)
+  width: .23
+VLAD:
+  n_clusters: 8
+BEHAVIOR:
+  buffer_size: 400 #try increasing
+  # residual_max: 36.0
+  # uncertainty_threshold: .88
+  # residual_max: 27.0
+  # uncertainty_threshold: .96
+  # residual_max: 26.0
+  # uncertainty_threshold: .82
+  #wheelchair
+  residual_max: 22.5
+  uncertainty_threshold: .9
+  buffer_update_freq: 2
+  cost_lengthscale: 7.0
+  speed_lengthscale: 1.5
+  # speed_init: 3.0
+  max_cost: .25
+  max_velocity: 1
+  velocity_margin: .15
+  train_kernel: False
+  costmap_cvar: .03
+  unknown_cost: .1
+  unknown_speed: 5
+  maxpool_speedmap: False
+  # adaptation_factor: .001
+  # speed_cap: 5.5
+  # weighted_avg_speed: False
+MISC:
+  update_freq: 5
