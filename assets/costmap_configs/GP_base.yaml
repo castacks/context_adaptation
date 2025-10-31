@@ -13,7 +13,8 @@ BEHAVIOR:
   # residual_max: 27.0
   # uncertainty_threshold: .96
   # residual_max: 26.0 #og
-  residual_max: 20.0 #loftup
+  # residual_max: 20.0 #loftup
+  residual_max: 17.0 #Loftup thermal
   # uncertainty_threshold: .8 # (min threshold for gridmap cell to be high uncertainty/cost) more cost diversity
   uncertainty_threshold: .8 #.75
   buffer_update_freq: 2

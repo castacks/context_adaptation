@@ -94,7 +94,7 @@ class SalonCostmap():
         self.num_insert = 0
         
         #probably would be smarter to use the actual update buffer method oops
-        avoid_class = 5 #looks like 3 or 5|6
+        avoid_class = 7 #looks like 3 or 5|6
         num_insert = 8
         spread = 1.2
         avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
@@ -103,8 +103,8 @@ class SalonCostmap():
         avoid_data[:,-1] = 1.0
         for i in range(num_insert):
             avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
-           14.259332, 15.66645 ]).cuda() / self.residual_max
+            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([10.783815 , 12.404769 , 10.064372 , 13.6482525, 13.693771 ,
+            8.557446 ,  7.989005 ,  7.7702436]).cuda() / self.residual_max
 
         self.num_insert += num_insert
         self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
@@ -112,22 +112,22 @@ class SalonCostmap():
         self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
         # ================= red course
-        avoid_class = 1 #looks like 3 or 5|6
-        num_insert = 8
-        spread = 1.2
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 0.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([17.482841 , 11.984167 , 16.002846 , 16.459595 , 16.39979  ,
-       17.593773 , 14.495054 , 15.1164665]).cuda() / self.residual_max
+    #     avoid_class = 1 #looks like 3 or 5|6
+    #     num_insert = 8
+    #     spread = 1.2
+    #     avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
+    #     avoid_classes = np.zeros((num_insert)) + avoid_class
+    #     avoid_labels = torch.ones((num_insert,1)).cuda()
+    #     avoid_data[:,-1] = 0.0
+    #     for i in range(num_insert):
+    #         avoid_data[i,-2] = i*spread
+    #         avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([17.482841 , 11.984167 , 16.002846 , 16.459595 , 16.39979  ,
+    #    17.593773 , 14.495054 , 15.1164665]).cuda() / self.residual_max
 
-        self.num_insert += num_insert
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
+        # self.num_insert += num_insert
+        # self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        # self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
+        # self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
         # =======================================
 
         # [11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
@@ -140,7 +140,13 @@ class SalonCostmap():
     #     [17.482841 , 11.984167 , 16.002846 , 16.459595 , 16.39979  ,
     #    17.593773 , 14.495054 , 15.1164665]
 
-        
+        #loftup thermal tree (map)
+        # [10.783815 , 12.404769 , 10.064372 , 13.6482525, 13.693771 ,
+        # 8.557446 ,  7.989005 ,  7.7702436]
+
+        #loftup thermal tree (fpv)
+        # [15.63574 , 15.912697, 14.979145, 15.346955, 16.76917 , 14.184563,
+        # 9.476609, 13.085821]
 
         # self.num_insert = num_insert
         self.buffer_idx += self.num_insert
@@ -295,7 +301,7 @@ class SalonCostmap():
             self.hz_counter = 0
         self.hz_counter += 1
 
-        # np.save('/home/tartandriver/tartandriver_ws/featmap', featmap.cpu().numpy())
+        # np.save('/home/tartandriver/tartandriver_ws/featmap_img', feat_img.cpu().numpy())
 
         res_out = {'cost_image': None}
 
