@@ -23,6 +23,7 @@ from context_adaptation.common.gridmap_converter import GridMapConvert
 from context_adaptation.models.ExactGP import GPTraversability
 from context_adaptation.models.TravMLP import MLPTravRegress
 
+from tartandriver_utils.os_utils import load_yaml
 
 MODEL_MAP = {'GP': GPTraversability, 'MLPr': MLPTravRegress}
 import matplotlib
@@ -47,8 +48,7 @@ class SalonCostmap():
         
         self.assets_dir = '/home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets'
 
-        with open(os.path.join(self.assets_dir, self.config_file), 'r') as file :
-            config = yaml.load(file, Loader=yaml.FullLoader)
+        config = load_yaml(os.path.join(self.assets_dir, self.config_file))
 
         self.hz_counter = 0
 
@@ -68,11 +68,11 @@ class SalonCostmap():
 
         self.tire_transforms = [transform_front_left, transform_front_right, transform_rear_left, transform_rear_right]
 
-        #TODO Grab this dynamically as well
-        self.VLAD_CLUSTS = config['VLAD']['n_clusters']
+        feats_conf = config['BEHAVIOR']['feats']
+        self.VLAD_CLUSTS = feats_conf['n_clusters']
 
-        self.residual_max = config['BEHAVIOR']['residual_max']
-        self.uc_thresh = config['BEHAVIOR']['uncertainty_threshold']
+        self.residual_max = feats_conf['residual_max']
+        self.uc_thresh = feats_conf['uncertainty_threshold']
 
         # self.cost_lengthscale = config['BEHAVIOR']['cost_lengthscale']
         # self.speed_lengthscale = config['BEHAVIOR']['speed_lengthscale']
@@ -81,7 +81,7 @@ class SalonCostmap():
         buffer_len = config['BEHAVIOR']['buffer_size']
         self.buffer_update_freq = config['BEHAVIOR']['buffer_update_freq']
         self.train_in_buffer = torch.zeros((buffer_len,self.VLAD_CLUSTS + 2)).cuda()
-        self.train_label_buffer = torch.zeros((buffer_len,1)).cuda()
+        # self.train_label_buffer = torch.zeros((buffer_len,1)).cuda()
         self.train_buffer_classes = np.zeros((buffer_len))
         self.toi = np.zeros((buffer_len))
         self.buffer_idx = 0
@@ -92,78 +92,38 @@ class SalonCostmap():
         self.fake_velocity = 0.0
 
         self.num_insert = 0
-        
-        #probably would be smarter to use the actual update buffer method oops
-        avoid_class = 7 #looks like 3 or 5|6
-        num_insert = 8
-        spread = 1.2
-        avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-        avoid_classes = np.zeros((num_insert)) + avoid_class
-        avoid_labels = torch.ones((num_insert,1)).cuda()
-        avoid_data[:,-1] = 1.0
-        for i in range(num_insert):
-            avoid_data[i,-2] = i*spread
-            avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([10.783815 , 12.404769 , 10.064372 , 13.6482525, 13.693771 ,
-            8.557446 ,  7.989005 ,  7.7702436]).cuda() / self.residual_max
+        for label in feats_conf['labels']:
+            feat = torch.Tensor(label['feat']).cuda()/self.residual_max
+            cost = label['cost']
+            self.insert_label(feat, cost, feats_conf['num_insert'], feats_conf['spread'])
 
-        self.num_insert += num_insert
-        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
-        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-
-        # ================= red course
-    #     avoid_class = 1 #looks like 3 or 5|6
-    #     num_insert = 8
-    #     spread = 1.2
-    #     avoid_data = torch.ones(num_insert,self.VLAD_CLUSTS + 2).cuda() * .9
-    #     avoid_classes = np.zeros((num_insert)) + avoid_class
-    #     avoid_labels = torch.ones((num_insert,1)).cuda()
-    #     avoid_data[:,-1] = 0.0
-    #     for i in range(num_insert):
-    #         avoid_data[i,-2] = i*spread
-    #         avoid_data[i,:self.VLAD_CLUSTS] = torch.Tensor([17.482841 , 11.984167 , 16.002846 , 16.459595 , 16.39979  ,
-    #    17.593773 , 14.495054 , 15.1164665]).cuda() / self.residual_max
-
-        # self.num_insert += num_insert
-        # self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
-        # self.train_label_buffer = torch.vstack(( avoid_labels, self.train_label_buffer))
-        # self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
-        # =======================================
-
-        # [11.887407, 16.80994 , 16.667885, 15.062829, 12.954934,  8.09457 ,
-        #    14.259332, 15.66645 ]
-
-    # [19.777752, 23.18438 , 21.908875, 18.12688 , 25.28553 , 23.31651 ,
-        #    21.984331, 24.273615]
-
-        #loftup trail
-    #     [17.482841 , 11.984167 , 16.002846 , 16.459595 , 16.39979  ,
-    #    17.593773 , 14.495054 , 15.1164665]
-
-        #loftup thermal tree (map)
-        # [10.783815 , 12.404769 , 10.064372 , 13.6482525, 13.693771 ,
-        # 8.557446 ,  7.989005 ,  7.7702436]
-
-        #loftup thermal tree (fpv)
-        # [15.63574 , 15.912697, 14.979145, 15.346955, 16.76917 , 14.184563,
-        # 9.476609, 13.085821]
-
-        # self.num_insert = num_insert
         self.buffer_idx += self.num_insert
 
         train_in_buffer = self.train_in_buffer[:self.buffer_idx]
-        #TODO parameterize
-        self.trav_model_indices = [0,1,2,3,4,5,6,7,8]
-        self.speed_model_indices = [0,1,2,3,4,5,6,7,9]
+        
+        #TODO parameterize and account for geom features
+        # self.trav_model_indices = [0,1,2,3,4,5,6,7,8]
+        # self.speed_model_indices = [0,1,2,3,4,5,6,7,9]
+        base_indices = np.arange(self.VLAD_CLUSTS + 2)
+        self.rough_idx = self.VLAD_CLUSTS + 1
+        self.speed_idx = self.VLAD_CLUSTS
+        self.trav_model_indices = [idx for idx in base_indices if idx != self.rough_idx]
+        self.speed_model_indices = [idx for idx in base_indices if idx != self.speed_idx]
 
-        trav_params_dir = os.path.join(self.assets_dir, 'gp_params', 'gp_params_speed_input')
-        speed_params_dir = os.path.join(self.assets_dir, 'gp_params', 'speed_gp_params_new')
-
-        # trav_params_dir = None
-        # speed_params_dir = None
+        self.check_ready()
 
         trav_config = config['BEHAVIOR']['trav_model']
         speed_config = config['BEHAVIOR']['speed_model']
+
+        if 'weights' in trav_config:
+            trav_params_dir = os.path.join(self.assets_dir, 'gp_params', trav_config['weights'])
+        else:
+            trav_params_dir = None
+
+        if 'weights' in speed_config:
+            speed_params_dir = os.path.join(self.assets_dir, 'gp_params', speed_config['weights'])
+        else:
+            speed_params_dir = None
 
 
         self.trav_model = MODEL_MAP[trav_config['model_type']](train_in_buffer[:,self.trav_model_indices], 
@@ -198,7 +158,6 @@ class SalonCostmap():
 
 
     def handle_cost(self, cost):
-        # self.get_logger().info("received cost data")
         self.cost = cost
         self.cost -= self.cost_offset
         self.rough_history = self.rough_history + (cost - self.rough_history) * .2
@@ -227,10 +186,22 @@ class SalonCostmap():
 
                 self.grid_map_cvt.channels = self.channels
 
+    def insert_label(self, feat, cost, num_insert, spread):
+        avoid_class = feat.argmin()
+        avoid_data = torch.zeros(num_insert, self.VLAD_CLUSTS + 2).cuda()
+        avoid_classes = np.zeros((num_insert)) + avoid_class.item()
+        avoid_data[:,-1] = cost
+        for i in range(num_insert):
+            avoid_data[i,-2] = i*spread
+            avoid_data[i,:self.VLAD_CLUSTS] = feat
+
+        self.num_insert += num_insert
+        self.train_in_buffer = torch.vstack((avoid_data,self.train_in_buffer))
+        self.train_buffer_classes = np.concatenate((avoid_classes, self.train_buffer_classes))
 
     def update_train_buffer(self,input,label,class_id):
         self.train_in_buffer[self.buffer_idx] = input
-        self.train_label_buffer[self.buffer_idx] = label
+        # self.train_label_buffer[self.buffer_idx] = label
         self.train_buffer_classes[self.buffer_idx] = class_id
         self.buffer_idx = min(self.buffer_idx+1, self.train_in_buffer.shape[0])
 
@@ -238,20 +209,56 @@ class SalonCostmap():
             self.buffer_full = True
             # self.buffer_idx = 0
 
+        if not self.is_ready:
+            self.check_ready()
+
+    def check_ready(self):
+        self.is_ready = (len(self.train_in_buffer[:self.buffer_idx,self.rough_idx].unique() > 1) &
+                      len(self.train_in_buffer[:self.buffer_idx,self.speed_idx].unique() > 1))
 
     def insert_train_buffer(self,input,label, class_id, idx):
         self.train_in_buffer[idx] = input
-        self.train_label_buffer[idx] = label
+        # self.train_label_buffer[idx] = label
         self.train_buffer_classes[idx] = class_id
 
+        if not self.is_ready:
+            self.check_ready()
 
     def insert_train_buffer_FIFO(self,input,label, class_id):
         idx = np.argmin(self.toi)
         self.train_in_buffer[idx] = input
-        self.train_label_buffer[idx] = label
+        # self.train_label_buffer[idx] = label
         self.train_buffer_classes[idx] = class_id
         self.toi[idx] = self.hz_counter
 
+    def load_buffer(self, fpath):
+        state_dict = torch.load(fpath, weights_only=False)
+        for key, val in state_dict.items():
+            # print(attr, key)
+            # val = state_dict[key]
+            val = val.cuda() if hasattr(val, 'cuda') else val
+            setattr(self, key, val)
+
+        if not self.buffer_full:
+                train_in_buffer = self.train_in_buffer[:self.buffer_idx]
+        else:
+            train_in_buffer = self.train_in_buffer
+
+        self.trav_model.train(train_in_buffer[:,:-1], train_in_buffer[:,-1])
+        self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
+
+    def save_buffer(self, fpath):
+        save_props = ['train_in_buffer', 
+                       'train_buffer_classes', 
+                       'buffer_idx', 'num_insert', 
+                       'buffer_full']
+        
+        state_dict = {}
+        for key in save_props:
+            val = getattr(self, key)
+            state_dict[key] = val.cpu() if hasattr(val, 'cpu') else val
+
+        torch.save(state_dict, fpath)
 
     def estimate_tire_points(self):
         tire_points = np.ones((4, 3))
@@ -289,11 +296,12 @@ class SalonCostmap():
         cost_img = img_pred.reshape(feat_img.shape[0],feat_img.shape[1])
 
         cost_img = torch.clip(cost_img, 0,1)
-        cost_img *= .8
+        cost_img *= .5
         ids = torch.where(unc_img != 0)
         cost_img[ids] = unc_img[ids]
 
         return cost_img
+        # return cost_var.reshape(feat_img.shape[0],feat_img.shape[1])
 
     def run(self, featmap, metadata, odom, vel, cost, feat_img = None):
         now = time.perf_counter()
@@ -307,6 +315,8 @@ class SalonCostmap():
 
         self.handle_odom(odom, vel)
         self.handle_cost(cost)
+
+        # np.save('/home/tartandriver/tartandriver_ws/featmap', featmap.cpu().numpy())
 
         og_device = featmap.device
 
@@ -361,6 +371,8 @@ class SalonCostmap():
 
             if torch.count_nonzero(input_sample[:-2]) == 0:
                 print("IN UNKNOWN SPACE")
+            elif cost < 0.0:
+                print("INVALID/EMPTY COST")
             else:
                 if self.buffer_full:
                     # print("))))))))))))))))))))))))))))))))))))))))))))))))))")
@@ -390,13 +402,15 @@ class SalonCostmap():
         self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
 
         with torch.no_grad():
-            if self.buffer_idx < 5 + self.num_insert: #we need at least a couple samples apart from single label
+            # if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
+            if not self.is_ready:
                 costmap = torch.zeros(gridmap_size)
                 speedmap = torch.zeros(gridmap_size) + 4.5
                 costmap_var = torch.zeros_like(costmap)
                 speedmap_var = torch.zeros_like(speedmap)
+
                 if feat_img is not None:
-                    cost_img = torch.zeros_like(feat_img[:,:,0])
+                    cost_img = torch.zeros(feat_img.shape[:2]).float()
                     res_out['cost_image'] = cost_img
             else:
                 input = input.permute(1,2,0).view(-1,self.VLAD_CLUSTS)

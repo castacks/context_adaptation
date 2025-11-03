@@ -1,0 +1,12 @@
+---
+n_clusters: 8
+residual_max: 20.0
+uncertainty_threshold: .75
+num_insert: 8
+spread: 1.2
+labels:
+  -
+    type: trees
+    cost: 1.0
+    feat: [10.783815, 12.404769, 10.064372, 13.6482525, 13.693771,
+          8.557446, 7.989005, 7.7702436]
