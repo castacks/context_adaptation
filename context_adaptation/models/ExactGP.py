@@ -33,6 +33,9 @@ class GPTraversability():
         self.update_thresh = config['update_thresh']
         self.train_kernel = config['train_kernel']
 
+        if self.train_kernel:
+            print("GP KERNEL TRAINING ENABLED, maybe no a good idea online")
+        
         self.gp_params = None
         self.params_dir = params_dir
 

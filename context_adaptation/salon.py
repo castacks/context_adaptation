@@ -309,6 +309,8 @@ class SalonCostmap():
             self.hz_counter = 0
         self.hz_counter += 1
 
+        # np.save('/home/tartandriver/tartandriver_ws/featmap_img', feat_img.cpu().numpy())
+
         res_out = {'cost_image': None}
 
         self.handle_odom(odom, vel)
