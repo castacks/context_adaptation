@@ -1,7 +1,7 @@
 ---
 n_clusters: 8
 residual_max: 29.0
-uncertainty_threshold: .8
+uncertainty_threshold: 0.8 #.75 at redcourse
 num_insert: 16
 spread: .6
 labels:

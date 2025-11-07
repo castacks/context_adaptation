@@ -1,7 +1,7 @@
 ---
 n_clusters: 8
-residual_max: 20.0
-uncertainty_threshold: .75
+residual_max: 17.0
+uncertainty_threshold: .8
 num_insert: 8
 spread: 1.2
 labels:
