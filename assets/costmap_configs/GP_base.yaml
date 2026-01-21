@@ -10,11 +10,11 @@ BEHAVIOR:
   feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/radio_16.yaml #_thermal
   buffer_update_freq: 2
   # speed_init: 3.0
-  max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
+  max_cost: .18 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
   max_velocity: 6
   velocity_margin: 1.0 #high on bag playback since we don't control speed
   costmap_cvar: .03
-  unknown_cost: .1
+  unknown_cost: .05
   unknown_speed: 5
   maxpool_speedmap: True
   trav_model:

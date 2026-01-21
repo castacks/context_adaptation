@@ -22,34 +22,70 @@ CMAP = cm.magma
 CMAP_JET = cm.jet
 
 
-
-def overlay_heatmap_on_image(image, heatmap, max_val = 3., threshold=0.01, alpha=0.6, cmap='jet'):
-
+def overlay_heatmap_on_image(
+    image,
+    heatmap,
+    max_val=3.0,
+    threshold=0.01,
+    alpha=0.6,
+):
     H, W = image.shape[:2]
-    heatmap = cv2.resize(heatmap, (W, H), interpolation=cv2.INTER_LINEAR)
 
-    # Normalize heatmap to [0, 1]
-    # hm_norm = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + 1e-8)
-    hm_norm = np.clip(heatmap/max_val, 0, 1.)
-    # Apply matplotlib colormap (returns RGBA)
-    # cmap_fn = cm.get_cmap(cmap)
-    hm_color = CMAP_JET(hm_norm)[..., :3]  # drop alpha channel
+    # Resize heatmap
+    heatmap = cv2.resize(heatmap, (W, H), interpolation=cv2.INTER_NEAREST)
 
-    # Create binary mask where heatmap exceeds threshold
-    mask = (hm_norm > threshold)[..., None].astype(float)
+    # Normalize to [0, 255]
+    hm = np.clip(heatmap / max_val, 0, 1)
+    hm_u8 = (hm * 255).astype(np.uint8)
 
-    # Convert image to float in [0,1] if needed
-    if image.dtype == np.uint8:
-        img_float = image.astype(np.float32) / 255.0
+    # Apply OpenCV colormap (BGR!)
+    hm_color = cv2.applyColorMap(hm_u8, cv2.COLORMAP_JET)
+    hm_color = cv2.cvtColor(hm_color, cv2.COLOR_BGR2RGB)
+
+    # Threshold mask
+    mask = hm > threshold
+
+    # Ensure image uint8
+    if image.dtype != np.uint8:
+        img_u8 = np.clip(image * 255, 0, 255).astype(np.uint8)
     else:
-        img_float = image.copy()
+        img_u8 = image
 
-    # Blend where mask is active
-    overlay = img_float * (1 - alpha * mask) + hm_color * (alpha * mask)
+    # Alpha blend only where mask is true
+    overlay = img_u8.copy()
+    overlay[mask] = (
+        (1 - alpha) * img_u8[mask] +
+        alpha * hm_color[mask]
+    ).astype(np.uint8)
 
-    # Convert back to uint8
-    overlay = np.clip(overlay * 255, 0, 255).astype(np.uint8)
     return overlay
+# def overlay_heatmap_on_image(image, heatmap, max_val = 3., threshold=0.01, alpha=0.6, cmap='jet'):
+
+#     H, W = image.shape[:2]
+#     heatmap = cv2.resize(heatmap, (W, H), interpolation=cv2.INTER_LINEAR)
+
+#     # Normalize heatmap to [0, 1]
+#     # hm_norm = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + 1e-8)
+#     hm_norm = np.clip(heatmap/max_val, 0, 1.)
+#     # Apply matplotlib colormap (returns RGBA)
+#     # cmap_fn = cm.get_cmap(cmap)
+#     hm_color = CMAP_JET(hm_norm)[..., :3]  # drop alpha channel
+
+#     # Create binary mask where heatmap exceeds threshold
+#     mask = (hm_norm > threshold)[..., None].astype(float)
+
+#     # Convert image to float in [0,1] if needed
+#     if image.dtype == np.uint8:
+#         img_float = image.astype(np.float32) / 255.0
+#     else:
+#         img_float = image.copy()
+
+#     # Blend where mask is active
+#     overlay = img_float * (1 - alpha * mask) + hm_color * (alpha * mask)
+
+#     # Convert back to uint8
+#     overlay = np.clip(overlay * 255, 0, 255).astype(np.uint8)
+#     return overlay
 
 def compute_pixel_headings(K, H, W, H_orig=None, W_orig=None, device='cpu'):
     """
