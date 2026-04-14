@@ -46,9 +46,12 @@ class SalonCostmap():
         #TODO
         self.config_file = 'costmap_configs/GP_base.yaml'
         
-        self.assets_dir = '/home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets'
+        self.assets_dir = '/home/tartandriver/cat_tartandriver_ws/cat_configs/context_adaptation/assets'
 
         config = load_yaml(os.path.join(self.assets_dir, self.config_file))
+
+        self.rotate_odom = config['ROBOT']['rotate_odom'] #True
+        self.modulate_speed_cvar = config['BEHAVIOR']['modulate_speed_cvar'] #False
 
         self.hz_counter = 0
 
@@ -154,6 +157,18 @@ class SalonCostmap():
     def handle_odom(self, odom, vel):
         self.velocity = vel
         self.pose_se3 = odom.cpu().numpy()
+
+        if self.rotate_odom:
+            #TODO TEMP fix
+            self.pose_se3[:3,:3] = self.pose_se3[:3,:3].T
+            theta = np.radians(90)
+            R_adj = np.array([
+                [np.cos(theta), -np.sin(theta), 0],
+                [np.sin(theta),  np.cos(theta), 0],
+                [0,              0,             1]
+            ])
+            self.pose_se3[:3,:3] = self.pose_se3[:3,:3] @ R_adj
+
         self.vel_history = self.vel_history + (self.velocity - self.vel_history) * .1
 
 
@@ -191,6 +206,8 @@ class SalonCostmap():
         avoid_data = torch.zeros(num_insert, self.VLAD_CLUSTS + 2).cuda()
         avoid_classes = np.zeros((num_insert)) + avoid_class.item()
         avoid_data[:,-1] = cost
+        # if cost >= 1.:
+            # avoid_data[0,-1] = .1
         for i in range(num_insert):
             avoid_data[i,-2] = i*spread
             avoid_data[i,:self.VLAD_CLUSTS] = feat
@@ -311,12 +328,13 @@ class SalonCostmap():
 
         # np.save('/home/tartandriver/tartandriver_ws/featmap_img', feat_img.cpu().numpy())
 
-        res_out = {'cost_image': None}
+        # res_out = {'cost_image': None}
+        res_out = {}
 
         self.handle_odom(odom, vel)
         self.handle_cost(cost)
 
-        # np.save('/home/tartandriver/tartandriver_ws/featmap', featmap.cpu().numpy())
+        # np.save('/home/tartandriver/cat_tartandriver_ws/featmap', featmap.cpu().numpy())
 
         og_device = featmap.device
 
@@ -366,14 +384,17 @@ class SalonCostmap():
 
         if (self.velocity > .3) and self.hz_counter % self.buffer_update_freq == 0:
             # input_sample = input[:,xloc[0],yloc[0]]
-            input_sample = input[:,xloc,yloc].mean(dim=1)
-            input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]).cuda(),torch.Tensor([self.cost]).cuda()))
+            input_sample = input[:,xloc,yloc]
 
-            if torch.count_nonzero(input_sample[:-2]) == 0:
+            in_observed = torch.count_nonzero(input_sample[:,:-2], dim=1) > 0
+
+            if not in_observed.any():
                 print("IN UNKNOWN SPACE")
             elif cost < 0.0:
                 print("INVALID/EMPTY COST")
             else:
+                input_sample = input_sample[in_observed].mean(dim=1)
+                input_sample = torch.cat((input_sample, torch.Tensor([self.velocity]).cuda(),torch.Tensor([self.cost]).cuda()))
                 if self.buffer_full:
                     # print("))))))))))))))))))))))))))))))))))))))))))))))))))")
                     most_class = stats.mode(self.train_buffer_classes)[0]
@@ -391,21 +412,24 @@ class SalonCostmap():
                     self.update_train_buffer(input_sample, self.cost, spot)
 
         costmap = torch.zeros(gridmap_len).to(og_device)
-        speedmap = torch.zeros(gridmap_len).to(og_device) + 4.5
+        speedmap = torch.zeros(gridmap_len).to(og_device) + self.max_velocity*.75
 
         if not self.buffer_full:
                 train_in_buffer = self.train_in_buffer[:self.buffer_idx]
         else:
             train_in_buffer = self.train_in_buffer
 
+        speed_train_buffer = train_in_buffer.clone()
+        # keep_idxs = speed_train_buffer[:,-1] <= self.max_roughness
+        # speed_train_buffer = speed_train_buffer[keep_idxs]
         self.trav_model.train(train_in_buffer[:,:-1], train_in_buffer[:,-1])
-        self.speed_model.train(train_in_buffer[:,self.speed_model_indices], train_in_buffer[:,-2])
+        self.speed_model.train(speed_train_buffer[:,self.speed_model_indices], speed_train_buffer[:,-2])
 
         with torch.no_grad():
             # if self.buffer_idx < 0 + self.num_insert: #we need at least a couple samples apart from single label
             if not self.is_ready:
                 costmap = torch.zeros(gridmap_size)
-                speedmap = torch.zeros(gridmap_size) + 4.5
+                speedmap = torch.zeros(gridmap_size) + self.max_velocity*.75
                 costmap_var = torch.zeros_like(costmap)
                 speedmap_var = torch.zeros_like(speedmap)
 
@@ -436,26 +460,28 @@ class SalonCostmap():
                     m = torch.nn.MaxPool2d(ksize,stride=1, padding = padding)
                     speedmap = m(speedmap.unsqueeze(0))[0]
 
-                if (self.rough_history < self.max_roughness) and torch.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
-                    self.cvar_alpha += 0.005
-                elif (self.rough_history > self.max_roughness):# and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
-                    self.cvar_alpha -= 0.02
-                self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
+                if self.modulate_speed_cvar:
+                    if (self.rough_history < self.max_roughness) and torch.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
+                        self.cvar_alpha += 0.0005
+                    elif (self.rough_history > self.max_roughness):# and np.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) < self.velocity_margin:
+                        self.cvar_alpha -= 0.02
+                    self.cvar_alpha = np.clip(self.cvar_alpha, 0,.99)
 
-                #atv can't track well at low speeds then increase cvar
-                if (torch.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) > .4) and speedmap[xloc[0],yloc[0]] < 2.8:
-                    self.cvar_alpha += .01
+                    #atv can't track well at low speeds then increase cvar
+                    if (torch.abs(self.vel_history - speedmap[xloc[0],yloc[0]]) > .4) and speedmap[xloc[0],yloc[0]] < 2.8:
+                        self.cvar_alpha += .01
 
                 if feat_img is not None:
                     cost_img = self.predict_img(feat_img)
                     res_out['cost_image'] = cost_img
 
-            if self.buffer_idx < 30 + self.num_insert: #let's give the speedmap a bit more time
-                speedmap = torch.zeros(gridmap_size) + 4.5
+            if self.buffer_idx < 15 + self.num_insert: #let's give the speedmap a bit more time
+                speedmap = torch.zeros(gridmap_size) + self.max_velocity*.75
                 self.cvar_alpha = 0.0
 
         
         costmap /= 2.0
+        # costmap[xloc,yloc] = 1. #only turn on to debug tire position queries
         # costmap *= 0.0
         ids = torch.where(unc_map != 0)
 
