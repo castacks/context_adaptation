@@ -7,7 +7,7 @@ ROBOT:
 BEHAVIOR:
   buffer_size: 400 #reduce if running slow, try to keep above 1-200
   # feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/jafar_dinov2s_224x224_16.yaml
-  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/radio_16.yaml #_thermal
+  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/loftup_dinov2s_224x224_8.yaml
   buffer_update_freq: 2
   # speed_init: 3.0
   max_cost: .18 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
@@ -30,5 +30,4 @@ BEHAVIOR:
     update_thresh: 10
     train_kernel: False
     #weights_dir: speed_gp_params_new
-MISC:
-  update_freq: 5
+
