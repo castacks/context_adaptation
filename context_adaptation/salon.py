@@ -46,7 +46,7 @@ class SalonCostmap():
         #TODO
         self.config_file = 'costmap_configs/GP_base.yaml'
         
-        self.assets_dir = '/home/tartandriver/cat_tartandriver_ws/cat_configs/context_adaptation/assets'
+        self.assets_dir = '/home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets'
 
         config = load_yaml(os.path.join(self.assets_dir, self.config_file))
 
