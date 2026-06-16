@@ -4,6 +4,7 @@ ROBOT:
   front_x: .59 #-0.91-(-1.5)
   back_x: -2.41 #-0.91-(1.5)
   width: .72
+  rotate_odom: False
 BEHAVIOR:
   buffer_size: 400 #reduce if running slow, try to keep above 1-200
   # feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/jafar_dinov2s_224x224_16.yaml
@@ -16,6 +17,7 @@ BEHAVIOR:
   costmap_cvar: .03
   unknown_cost: .05
   unknown_speed: 5
+  modulate_speed_cvar: True
   maxpool_speedmap: True
   trav_model:
     model_type: GP
