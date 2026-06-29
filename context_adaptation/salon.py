@@ -41,10 +41,10 @@ except:
 #time-based stuff
 
 class SalonCostmap():
-    def __init__(self):
+    def __init__(self, config_file='costmap_configs/GP_base.yaml'):
 
         #TODO
-        self.config_file = 'costmap_configs/GP_base.yaml'
+        self.config_file = config_file
         
         self.assets_dir = '/home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets'
 

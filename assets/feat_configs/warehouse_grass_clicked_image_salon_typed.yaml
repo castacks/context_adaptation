@@ -1,0 +1,118 @@
+n_clusters: 8
+residual_max: 29.0
+uncertainty_threshold: 0.8
+num_insert: 16
+spread: 0.6
+labels:
+- type: bush
+  cost: 1.0
+  feat:
+  - 1.8154643774032593
+  - 0.04934598132967949
+  - -0.13052642345428467
+  - -1.194667100906372
+  - 0.704180121421814
+  - 0.16363561153411865
+  - 0.16130533814430237
+  - 0.6502218842506409
+- type: path
+  cost: 0.0
+  feat:
+  - -2.028440475463867
+  - -1.4294073581695557
+  - -0.363400399684906
+  - -0.6401830315589905
+  - 0.7605864405632019
+  - 0.008137154392898083
+  - 0.29566043615341187
+  - 0.05580694600939751
+- type: smooth_grass
+  cost: 0.0
+  feat:
+  - -1.0080151557922363
+  - 0.9460458755493164
+  - 0.5033426880836487
+  - -0.2958633005619049
+  - -0.30578404664993286
+  - 0.5289202332496643
+  - -0.1778523325920105
+  - 0.5477748513221741
+- type: tree
+  cost: 1.0
+  feat:
+  - 1.5784881114959717
+  - 0.2181217074394226
+  - 0.28922903537750244
+  - -0.4580952823162079
+  - 0.9357911944389343
+  - 0.35492169857025146
+  - -0.11553346365690231
+  - -0.2522360682487488
+metadata:
+  run_dir: /home/tartandriver/datasets/2025-03-25_warehouse_grass_roughness_inpainting
+  config: src/core/torch_coordinator/config/top_level/travsuite_image_salon_warehouse_grass.yaml
+  mask_dir: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass
+  cost_yaml: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass/costs.yaml
+  feature_key: mapping/feature_pointcloud_in_vehicle
+  feature_indices: 0:8
+  types:
+  - type: bush
+    cost: 1.0
+    total_points: 816
+    masks:
+    - mask: 00000158.mask.png
+      points: 816
+      mean_feat:
+      - 1.8154644966125488
+      - 0.049345970153808594
+      - -0.13052642345428467
+      - -1.1946669816970825
+      - 0.7041800618171692
+      - 0.16363559663295746
+      - 0.16130533814430237
+      - 0.6502220034599304
+  - type: path
+    cost: 0.0
+    total_points: 772
+    masks:
+    - mask: 00000261.mask.png
+      points: 772
+      mean_feat:
+      - -2.028440475463867
+      - -1.4294072389602661
+      - -0.3634004294872284
+      - -0.6401830315589905
+      - 0.7605864405632019
+      - 0.008137156255543232
+      - 0.2956604063510895
+      - 0.05580694600939751
+  - type: smooth_grass
+    cost: 0.0
+    total_points: 313
+    masks:
+    - mask: 00000261.mask.png
+      points: 313
+      mean_feat:
+      - -1.0080150365829468
+      - 0.9460458755493164
+      - 0.5033426880836487
+      - -0.2958632707595825
+      - -0.30578404664993286
+      - 0.5289202928543091
+      - -0.1778523176908493
+      - 0.5477747917175293
+  - type: tree
+    cost: 1.0
+    total_points: 1274
+    masks:
+    - mask: 00000367.mask.png
+      points: 1274
+      mean_feat:
+      - 1.5784882307052612
+      - 0.218121737241745
+      - 0.2892290949821472
+      - -0.4580953121185303
+      - 0.9357912540435791
+      - 0.35492172837257385
+      - -0.11553347110748291
+      - -0.2522360682487488

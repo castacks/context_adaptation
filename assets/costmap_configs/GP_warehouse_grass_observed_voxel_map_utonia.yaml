@@ -1,0 +1,34 @@
+---
+ROBOT:
+  frame_height: 1.85
+  front_x: .59 #-0.91-(-1.5)
+  back_x: -2.41 #-0.91-(1.5)
+  width: .72
+BEHAVIOR:
+  buffer_size: 400 #reduce if running slow, try to keep above 1-200
+  # feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/jafar_dinov2s_224x224_16.yaml
+  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/warehouse_grass_clicked_observed_voxel_map_utonia_typed.yaml
+  buffer_update_freq: 2
+  # speed_init: 3.0
+  max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap
+  max_velocity: 6
+  velocity_margin: 1.0 #high on bag playback since we don't control speed
+  costmap_cvar: .03
+  unknown_cost: .1
+  unknown_speed: 5
+  maxpool_speedmap: True
+  trav_model:
+    model_type: GP
+    # model_type: MLPr
+    lengthscale: 3.0
+    update_thresh: 10
+    train_kernel: False
+    #weights_dir: gp_params_speed_input
+  speed_model:
+    model_type: GP
+    lengthscale: 1.5
+    update_thresh: 10
+    train_kernel: False
+    #weights_dir: speed_gp_params_new
+MISC:
+  update_freq: 5

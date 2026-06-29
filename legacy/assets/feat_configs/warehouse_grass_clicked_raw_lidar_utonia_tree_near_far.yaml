@@ -1,0 +1,64 @@
+n_clusters: 8
+residual_max: 29.0
+uncertainty_threshold: 0.8
+num_insert: 16
+spread: 0.6
+labels:
+- type: tree_near
+  cost: 1.0
+  feat:
+  - 30.544926
+  - 21.617683
+  - 23.066095
+  - 30.232233
+  - 29.31305
+  - 24.28068
+  - 28.431995
+  - 25.61343
+- type: tree_far
+  cost: 1.0
+  feat:
+  - 21.831043
+  - 28.749626
+  - 31.394346
+  - 23.782526
+  - 16.737015
+  - 29.864859
+  - 20.140745
+  - 25.238285
+metadata:
+  run_dir: /home/tartandriver/datasets/2025-03-25_warehouse_grass_roughness_inpainting
+  config: src/core/torch_coordinator/config/top_level/travsuite_utonia_salon_raw_lidar_warehouse_grass.yaml
+  mask_dir: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass
+  cost_yaml: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass/costs.yaml
+  feature_key: mapping/feature_pointcloud_in_vehicle
+  feature_indices: 0:8
+  types:
+  - type: tree_near
+    cost: 1.0
+    total_points: null
+    source: manually_provided
+    masks: []
+    mean_feat:
+    - 30.544926
+    - 21.617683
+    - 23.066095
+    - 30.232233
+    - 29.31305
+    - 24.28068
+    - 28.431995
+    - 25.61343
+  - type: tree_far
+    cost: 1.0
+    total_points: null
+    source: manually_provided
+    masks: []
+    mean_feat:
+    - 21.831043
+    - 28.749626
+    - 31.394346
+    - 23.782526
+    - 16.737015
+    - 29.864859
+    - 20.140745
+    - 25.238285
