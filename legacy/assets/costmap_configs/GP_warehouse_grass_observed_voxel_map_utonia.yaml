@@ -7,7 +7,7 @@ ROBOT:
 BEHAVIOR:
   buffer_size: 400 #reduce if running slow, try to keep above 1-200
   # feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/jafar_dinov2s_224x224_16.yaml
-  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/warehouse_grass_clicked_raw_accumulated_cropped_utonia_typed.yaml
+  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/legacy/assets/feat_configs/warehouse_grass_clicked_observed_voxel_map_utonia_typed.yaml
   buffer_update_freq: 2
   # speed_init: 3.0
   max_cost: .15 # (max desired roughness, if exceeding then we slow down) lower means diverse colors in speedmap

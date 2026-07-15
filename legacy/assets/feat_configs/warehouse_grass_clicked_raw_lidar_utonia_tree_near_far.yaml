@@ -28,7 +28,7 @@ labels:
   - 25.238285
 metadata:
   run_dir: /home/tartandriver/datasets/2025-03-25_warehouse_grass_roughness_inpainting
-  config: src/core/torch_coordinator/config/top_level/travsuite_utonia_salon_raw_lidar_warehouse_grass.yaml
+  config: src/core/torch_coordinator/legacy/config/top_level/travsuite_utonia_salon_raw_lidar_warehouse_grass.yaml
   mask_dir: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass
   cost_yaml: /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/click_masks/warehouse_grass/costs.yaml
   feature_key: mapping/feature_pointcloud_in_vehicle
