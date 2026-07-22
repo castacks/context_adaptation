@@ -1,0 +1,28 @@
+ROBOT:
+  frame_height: 1.85
+  front_x: 0.59
+  back_x: -2.41
+  width: 0.72
+BEHAVIOR:
+  buffer_size: 400
+  feats: !include /home/tartandriver/tartandriver_ws/src/planning/context_adaptation/assets/feat_configs/turnpike2warehouse_clicked_raw_lidar_utonia_kmeans8_typed.yaml
+  buffer_update_freq: 2
+  max_cost: 0.15
+  max_velocity: 6
+  velocity_margin: 1.0
+  costmap_cvar: 0.03
+  unknown_cost: 0.1
+  unknown_speed: 5
+  maxpool_speedmap: true
+  trav_model:
+    model_type: GP
+    lengthscale: 3.0
+    update_thresh: 10
+    train_kernel: false
+  speed_model:
+    model_type: GP
+    lengthscale: 1.5
+    update_thresh: 10
+    train_kernel: false
+MISC:
+  update_freq: 5
