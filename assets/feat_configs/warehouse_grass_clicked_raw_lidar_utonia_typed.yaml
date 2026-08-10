@@ -1,5 +1,5 @@
 n_clusters: 8
-residual_max: 40.0
+residual_max: 32.0 # 80% of original 40.0
 uncertainty_threshold: 0.8
 num_insert: 16
 spread: 0.6

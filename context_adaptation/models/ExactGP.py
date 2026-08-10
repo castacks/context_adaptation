@@ -32,6 +32,7 @@ class GPTraversability():
         self.lengthscale = config['lengthscale']
         self.update_thresh = config['update_thresh']
         self.train_kernel = config['train_kernel']
+        self.prediction_batch_size = config.get('prediction_batch_size', 4096)
 
         if self.train_kernel:
             print("GP KERNEL TRAINING ENABLED, maybe no a good idea online")
@@ -108,9 +109,14 @@ class GPTraversability():
 
         feats = (feats - self.in_mean)/self.in_std
 
-        gp_pred = self.likelihood(self.gp(feats))
-        pred = gp_pred.mean
-        var = gp_pred.variance
+        predictions = []
+        variances = []
+        for batch in feats.split(self.prediction_batch_size):
+            gp_pred = self.likelihood(self.gp(batch))
+            predictions.append(gp_pred.mean)
+            variances.append(gp_pred.variance)
+        pred = torch.cat(predictions)
+        var = torch.cat(variances)
 
         if cvar is not None:
             phi = stats.norm.pdf(stats.norm.ppf(cvar))
